@@ -64,7 +64,6 @@ python -m src.bot
 ## 📌 Notes
 
 - This bot uses YouTube as the playback source even for Spotify playlists
-- Yes I know that i am inporting yt_dlp as youtube_dl, it's because I started with one and switched to the other, it will be updated soon
 - Preloading system improves continuity but still depends on YouTube response speed
 - You may customize the command prefix and embed style in `bot.py`
 
@@ -81,6 +80,7 @@ python -m src.bot
 - DJ role only control
 - Potential queue save for continuity through restart
 - Saved custom playlists (Stored in private discord chat?)
+- Updated command system (Update to slash commands with auto-complete)
 
 ---
 
