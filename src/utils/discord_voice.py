@@ -17,6 +17,7 @@ async def play_song(voice_client, search_query, return_source=False):
         'default_search': 'ytsearch10',
         'noplaylist': True,
         'extract_flat': False,
+        'cookiefile': 'src/utils/cookies.txt',
     }
 
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
