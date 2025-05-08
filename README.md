@@ -84,6 +84,13 @@ python -m src.bot
 
 ---
 
+## 🙏 Credit
+
+This bot was created by [Cthede11](https://github.com/Cthede11).
+
+If you use or modify this bot, please include proper credit in your documentation or public deployment. A simple mention or link back is appreciated!
+
+---
 ## 📜 License
 
 MIT — Feel free to fork and build upon this project. But, I would love to hear about what you are up to or what ideas you have come up with!
