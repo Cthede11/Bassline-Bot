@@ -79,6 +79,7 @@ python -m src.bot
 - Lyrics fetch command
 - Auto Disconnect
 - DJ role only control
+- Potential queue save for continuity through restart
 
 ---
 
