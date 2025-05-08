@@ -80,6 +80,7 @@ python -m src.bot
 - Auto Disconnect
 - DJ role only control
 - Potential queue save for continuity through restart
+- Saved custom playlists (Stored in private discord chat?)
 
 ---
 
