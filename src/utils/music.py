@@ -8,15 +8,17 @@ class MusicManager:
         self.now_playing = {}  # guild_id -> track
         self.preloaded_source = {}  # ✅ NEW: guild_id -> FFmpegPCMAudio
 
-    async def add_to_queue(self, guild_id, track):
+    async def add_to_queue(self, guild_id, track, requested_by):
         if guild_id not in self.queues:
             self.queues[guild_id] = []
-        self.queues[guild_id].append(track)
+        self.queues[guild_id].append((track, requested_by))
+
 
     def get_next(self, guild_id):
         if guild_id in self.queues and self.queues[guild_id]:
             return self.queues[guild_id].pop(0)
-        return None
+        return None, None
+
 
     def shuffle_queue(self, guild_id):
         import random
@@ -54,6 +56,7 @@ class MusicManager:
             vc.stop()
 
 
-
 print("✅ MusicManager defined")
 print("Available names in music.py:", dir())
+
+music_manager = MusicManager()
