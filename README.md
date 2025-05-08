@@ -75,11 +75,11 @@ python -m src.bot
 - Volume Control
 - Bass Boost
 - Now Playing embed
-- Lyrics fetch command
+- Lyrics fetch command (Toggle on/off?)
 - Auto Disconnect
 - DJ role only control
-- Potential queue save for continuity through restart
-- Saved custom playlists (Stored in private discord chat?)
+- Queue saved locally for continuity through restart
+- Saved custom playlists (Stored in private discord chats?)
 - Updated command system (Update to slash commands with auto-complete)
 
 ---
