@@ -73,6 +73,27 @@ python -m src.bot
 
 ---
 
+### 🔐 Required Discord Bot Permissions
+To ensure BasslineBot works correctly, please make sure the bot has the following permissions when added to your server:
+
+## ✅ Essential Permissions
+Connect – Join voice channels
+
+Speak – Play music in voice channels
+
+Read Messages – See text channel commands and custom playlist entries
+
+Send Messages – Respond with playback messages and feedback
+
+Embed Links – Format messages and show rich embeds (future support for thumbnails)
+
+Use External Emojis (optional) – Enhanced emoji support for visual feedback
+
+Manage Channels (optional but recommended) – Automatically create playlist channels via !createplaylist
+
+View Channel – Access channels required for reading playlist data
+
+
 ## 🛠️ Coming Soon
 
 - Fix to slight playback cut when preloading next song
