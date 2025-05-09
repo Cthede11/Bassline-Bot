@@ -2,6 +2,9 @@
 import time
 import discord
 import yt_dlp
+import asyncio
+import functools
+
 
 # ANSI color codes
 class LogColors:
@@ -36,18 +39,26 @@ async def play_song(voice_client, search_query, return_source=False):
     start = time.time()
 
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio[ext=webm]/bestaudio/best',
         'quiet': True,
-        'default_search': 'ytsearch10',
+        'default_search': 'ytsearch',
         'noplaylist': True,
-        'extract_flat': False,
         'cookiefile': 'src/utils/cookies.txt',
         'restrictfilenames': True,
+        'forcejson': True,
     }
+
+    loop = asyncio.get_event_loop()
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            info = ydl.extract_info(f"{search_query} full song", download=False)
+            # Run in executor to keep Discord bot responsive
+            info = await loop.run_in_executor(None, functools.partial(ydl.extract_info, f"{search_query} full song", False))
+        except Exception as e:
+            if 'DRM' in str(e).upper():
+                raise Exception("🚫 The selected track is DRM-protected and cannot be played.")
+            raise Exception(f"❌ yt_dlp error: {str(e)}")
+
         except yt_dlp.utils.DownloadError as e:
             log("ERROR", f"yt_dlp failed: {e}", LogColors.RED)
             raise Exception(f"❌ yt_dlp error: {str(e)}")

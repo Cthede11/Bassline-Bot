@@ -57,7 +57,7 @@ class PlayCommand(commands.Cog):
 
         await ctx.send(f"✅ Queued {len(rest_of_tracks)} more track(s).")
 
-        # Preload the next song if available
+        # Preload the next song
         if rest_of_tracks:
             async def preload():
                 try:
@@ -82,7 +82,7 @@ class PlayCommand(commands.Cog):
         await ctx.send(f"▶️ Now playing: {track} (requested by {requested_by.mention})")
         music_manager.now_playing[guild_id] = track
 
-        # Use preloaded source if it exists
+        # Use preloaded source
         source = music_manager.preloaded_source.get(guild_id)
         if not source:
             source = await play_song(vc, track, return_source=True)
