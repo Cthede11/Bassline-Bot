@@ -1,18 +1,18 @@
 # 🎵 BasslineBot
 
-BasslineBot is a powerful, self-hosted Discord music bot that plays music from Spotify playlists and YouTube search. It supports preloading, queueing, and gapless playback, offering a smooth music experience in your server. This bot is still a work in progress, so if you have anything you think would be good to add, let me know! 
+BasslineBot is a powerful, self-hosted Discord music bot that plays music from  YouTube searches. It supports preloading, queueing, and gapless playback, offering a smooth music experience in your server. This bot is still a work in progress, so if you have anything you think would be good to add, let me know! 
 
 ---
 
 ## ⚙️ Features
 
-- 🔗 `!play [Spotify playlist | YouTube query | song name | custom Discord playlist]` — plays instantly
-- 📄 Spotify playlist importing (uses YouTube playback)
-- 🎵 Custom Discord playlists with !createplaylist and !playplaylist
+- 🎵 `!play [YouTube query | song name | custom Discord playlist]` — plays instantly
 - 📻 YouTube search-based streaming (via `yt_dlp`)
-- 🎚️ Queue system with `!queue`, `!skip`, `!shuffle`, `!clear`
-- ⏯️ `!pause` and `!resume` playback
-- 🚀 Preloads next track for nearly seamless transitions
+- 📂 Playlist system using Discord channels
+- 🎚️ Queue management with `!queue`, `!skip`, `!shuffle`, `!clear`
+- ⏯️ Playback control with `!pause` and `!resume`
+- ⚡ Preloads next track for seamless transitions
+- 🗃️ Custom playlists managed in Discord text channels
 
 ---
 
@@ -67,7 +67,7 @@ python -m src.bot
 
 ## 📌 Notes
 
-- This bot uses YouTube as the playback source even for Spotify playlists
+- This bot uses YouTube as the playback source for all songs
 - Preloading system improves continuity but still depends on YouTube response speed
 - You may customize the command prefix and embed style in `bot.py`
 

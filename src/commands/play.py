@@ -1,5 +1,4 @@
 from discord.ext import commands
-from src.utils.spotify import get_spotify_playlist_tracks
 from src.utils.discord_voice import join_voice_channel, play_song
 from src.utils.music import music_manager
 import asyncio
@@ -15,15 +14,7 @@ class PlayCommand(commands.Cog):
         vc = music_manager.voice_clients[guild_id]
 
         await ctx.send("🔍 Fetching tracks...")
-
-        try:
-            if "spotify.com/playlist" in query:
-                tracks = get_spotify_playlist_tracks(query)
-            else:
-                tracks = [query]
-        except Exception as e:
-            await ctx.send(f"❌ Error fetching tracks: {e}")
-            return
+        tracks = [query]
 
         if not tracks:
             await ctx.send("⚠️ No tracks found.")
