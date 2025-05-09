@@ -93,7 +93,7 @@ class PlaylistCommand(commands.Cog):
             await ctx.send("⚠️ No songs found in the playlist.")
             return
 
-        # Play the first track immediately
+        # Play the first track
         vc = await join_voice_channel(ctx)
         if not vc:
             return

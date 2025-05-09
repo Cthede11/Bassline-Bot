@@ -89,7 +89,6 @@ class PlayCommand(commands.Cog):
 
         music_manager.preloaded_source[guild_id] = None
 
-        # Preload the next song
         queue = music_manager.get_queue(guild_id)
         if queue:
             next_track, _ = queue[0]

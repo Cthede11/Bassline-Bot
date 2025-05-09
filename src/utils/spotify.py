@@ -1,4 +1,3 @@
-# filepath: c:\Users\cthed\Desktop\spotifyPlayer\discord-spotify-bot\src\utils\spotify.py
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from src.config.settings import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET

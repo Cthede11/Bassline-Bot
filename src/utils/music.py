@@ -3,10 +3,10 @@ import discord
 
 class MusicManager:
     def __init__(self):
-        self.queues = {}  # guild_id -> [track strings]
-        self.voice_clients = {}  # guild_id -> discord.VoiceClient
-        self.now_playing = {}  # guild_id -> track
-        self.preloaded_source = {}  # ✅ NEW: guild_id -> FFmpegPCMAudio
+        self.queues = {}
+        self.voice_clients = {}
+        self.now_playing = {}
+        self.preloaded_source = {}
 
     async def add_to_queue(self, guild_id, track, requested_by):
         if guild_id not in self.queues:

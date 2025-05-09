@@ -6,8 +6,9 @@ BasslineBot is a powerful, self-hosted Discord music bot that plays music from S
 
 ## ⚙️ Features
 
-- 🔗 `!play [Spotify playlist | YouTube query | song name]` — plays instantly
+- 🔗 `!play [Spotify playlist | YouTube query | song name | custom Discord playlist]` — plays instantly
 - 📄 Spotify playlist importing (uses YouTube playback)
+- 🎵 Custom Discord playlists with !createplaylist and !playplaylist
 - 📻 YouTube search-based streaming (via `yt_dlp`)
 - 🎚️ Queue system with `!queue`, `!skip`, `!shuffle`, `!clear`
 - ⏯️ `!pause` and `!resume` playback

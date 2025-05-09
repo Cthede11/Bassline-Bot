@@ -52,7 +52,7 @@ async def play_song(voice_client, search_query, return_source=False):
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            # Run in executor to keep Discord bot responsive
+            # Run in executor to keep it responsive
             info = await loop.run_in_executor(None, functools.partial(ydl.extract_info, f"{search_query} full song", False))
         except Exception as e:
             if 'DRM' in str(e).upper():
