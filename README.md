@@ -73,10 +73,10 @@ python -m src.bot
 
 ---
 
-### 🔐 Required Discord Bot Permissions
+## 🔐 Required Discord Bot Permissions
 To ensure BasslineBot works correctly, please make sure the bot has the following permissions when added to your server:
 
-## ✅ Essential Permissions
+### ✅ Essential Permissions
 Connect – Join voice channels
 
 Speak – Play music in voice channels
