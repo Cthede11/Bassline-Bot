@@ -49,15 +49,18 @@ python -m src.bot
 
 ## 💡 Available Commands
 
-| Command        | Description                                        |
-|----------------|----------------------------------------------------|
-| `!play [song]` | Plays a song or Spotify playlist                   |
-| `!queue`       | Shows the current queue                            |
-| `!skip`        | Skips the currently playing track                  |
-| `!pause`       | Pauses playback                                    |
-| `!resume`      | Resumes playback                                   |
-| `!shuffle`     | Shuffles the remaining queue                       |
-| `!clear`       | Clears the queue and stops playback                |
+| Command                           | Description                                                          |
+|-----------------------------------|----------------------------------------------------------------------|
+| `!play [song]`                    | Plays a song or Spotify playlist                                     |
+| `!queue`                          | Shows the current queue                                              |
+| `!skip`                           | Skips the currently playing track                                    |
+| `!pause`                          | Pauses playback                                                      |
+| `!resume`                         | Resumes playback                                                     |
+| `!shuffle`                        | Shuffles the remaining queue                                         |
+| `!clear`                          | Clears the queue and stops playback                                  |
+| `!setupplaylists`                 | Creates the playlist category to organize custom playlist channels   |
+| `!createplaylists` [name]         | Creates a new text channel playlist with the given name              |
+| `!playplaylists` [name/#channel]  | Plays songs from the named or mentioned custom playlist channel      |
 
 ---
 
@@ -79,7 +82,6 @@ python -m src.bot
 - Auto Disconnect
 - DJ role only control
 - Queue saved locally for continuity through restart
-- Saved custom playlists (Stored in private discord chats?)
 - Updated command system (Update to slash commands with auto-complete)
 
 ---
