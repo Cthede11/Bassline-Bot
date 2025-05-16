@@ -1,8 +1,11 @@
-import discord
 from discord.ext import commands
-import os
-import re
+from discord import app_commands, Interaction
+from discord import Object
+from src.utils.discord_voice import join_voice_channel, play_song
+from src.utils.music import music_manager
 import asyncio
+import discord
+import re
 
 class PlaylistCommand(commands.Cog):
     def __init__(self, bot):
@@ -10,58 +13,51 @@ class PlaylistCommand(commands.Cog):
         self.playlist_category_name = "🎵 Custom Playlists"
         print("✅ PlaylistCommand loaded")
 
-    @commands.command(name="setupplaylists")
-    @commands.has_permissions(manage_channels=True)
-    async def setup_playlists(self, ctx):
-        guild = ctx.guild
-
-        existing_category = discord.utils.get(guild.categories, name=self.playlist_category_name)
-        if not existing_category:
-            category = await guild.create_category(self.playlist_category_name)
-        else:
-            category = existing_category
-
-        await ctx.send(f"✅ Playlist category ready: {category.name}")
-
-    @commands.command(name="createplaylist")
-    async def create_playlist(self, ctx, *, playlist_name):
-        guild = ctx.guild
+    @app_commands.command(name="setupplaylists", description="Create a category for storing custom playlists")
+    async def setup_playlists(self, interaction: Interaction):
+        guild = interaction.guild
         category = discord.utils.get(guild.categories, name=self.playlist_category_name)
-
         if not category:
-            await ctx.send("⚠️ Playlist category not found. Run `!setupplaylists` first.")
+            category = await guild.create_category(self.playlist_category_name)
+
+        await interaction.response.send_message(f"✅ Playlist category ready: {category.name}")
+
+    @app_commands.command(name="createplaylist", description="Create a new playlist channel")
+    async def create_playlist(self, interaction: Interaction, playlist_name: str):
+        guild = interaction.guild
+        category = discord.utils.get(guild.categories, name=self.playlist_category_name)
+        if not category:
+            await interaction.response.send_message("⚠️ Playlist category not found. Run `/setupplaylists` first.")
             return
 
         channel_name = re.sub(r"[^a-z0-9-]", "", playlist_name.lower().replace(" ", "-"))
         existing = discord.utils.get(category.channels, name=channel_name)
         if existing:
-            await ctx.send("⚠️ A playlist with that name already exists.")
+            await interaction.response.send_message("⚠️ A playlist with that name already exists.")
             return
 
         new_channel = await guild.create_text_channel(channel_name, category=category)
-
         intro = (
             f"🎶 **Playlist: {playlist_name}**\n"
             f"Type song titles one per message below 👇\n"
             f"To play this playlist, use:\n"
-            f"`!playplaylist {playlist_name}`"
+            f"`/playlist {playlist_name}`"
         )
         await new_channel.send(intro)
-        await ctx.send(f"✅ Playlist `{playlist_name}` created!")
+        await interaction.response.send_message(f"✅ Playlist `{playlist_name}` created!")
 
-    @commands.command(name="playplaylist")
-    async def play_playlist(self, ctx, *, playlist_name):
+    @app_commands.command(name="playlist", description="Play songs from a playlist channel")
+    async def play_playlist(self, interaction: Interaction, playlist_name: str):
+        await interaction.response.defer()
         print(f"[Debug] play_playlist called with: {playlist_name}")
-        from src.utils.music import music_manager
-        from src.utils.discord_voice import join_voice_channel, play_song
 
-        guild = ctx.guild
+        guild = interaction.guild
         category = discord.utils.get(guild.categories, name=self.playlist_category_name)
         if not category:
-            await ctx.send("⚠️ Playlist category not found.")
+            await interaction.response.send_message("⚠️ Playlist category not found.")
             return
 
-        mention_match = re.match(r"<#(\d+)>", playlist_name.strip())
+        mention_match = re.match(r"<#(\\d+)>", playlist_name.strip())
         if mention_match:
             channel_id = int(mention_match.group(1))
             playlist_channel = guild.get_channel(channel_id)
@@ -79,7 +75,7 @@ class PlaylistCommand(commands.Cog):
 
         if not playlist_channel:
             print("[ERROR] Playlist channel not found.")
-            await ctx.send("⚠️ Playlist not found.")
+            await interaction.response.send_message("⚠️ Playlist not found.")
             return
 
         print(f"[DEBUG] Fetching messages from channel: {playlist_channel.name} (ID: {playlist_channel.id})")
@@ -90,39 +86,28 @@ class PlaylistCommand(commands.Cog):
         print("Songs found:", songs)
 
         if not songs:
-            await ctx.send("⚠️ No songs found in the playlist.")
+            await interaction.response.send_message("⚠️ No songs found in the playlist.")
             return
 
-        # Play the first track
-        vc = await join_voice_channel(ctx)
+        vc = await join_voice_channel(interaction)
         if not vc:
             return
         music_manager.voice_clients[guild.id] = vc
 
-        from src.utils.discord_voice import play_song
+        for track in songs:
+            await music_manager.add_to_queue(guild.id, track, interaction.user)
 
-        first = songs[0]
-        rest = songs[1:]
+        # Trigger playback manually if nothing is playing
+        if not vc.is_playing():
+            await self._play_next(interaction)
 
-        try:
-            source = await play_song(vc, first, return_source=True)
-            music_manager.now_playing[guild.id] = first
-            vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(self._play_next(ctx), self.bot.loop))
-            await ctx.send(f"▶️ Now playing: {first} (requested by {ctx.author.mention})")
-        except Exception as e:
-            await ctx.send(f"❌ Error playing: {e}")
-            return
+        await interaction.response.send_message(f"▶️ Now playing playlist: {playlist_channel.name} with {len(songs)} track(s).")
 
-        for track in rest:
-            await music_manager.add_to_queue(guild.id, track, ctx.author)
-        if rest:
-            await ctx.send(f"✅ Queued {len(rest)} more track(s).")
-
-    async def _play_next(self, ctx):
+    async def _play_next(self, interaction: discord.Interaction):
         from src.utils.music import music_manager
         from src.utils.discord_voice import play_song
 
-        guild_id = ctx.guild.id
+        guild_id = interaction.guild.id
         vc = music_manager.voice_clients.get(guild_id)
         if not vc:
             return
@@ -130,12 +115,26 @@ class PlaylistCommand(commands.Cog):
         track, requested_by = music_manager.get_next(guild_id)
 
         if not track:
-            await ctx.send("✅ Queue ended.")
+            await interaction.followup.send("✅ Queue ended.")
             return
 
         try:
-            source = await play_song(vc, track, return_source=True)
-            vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(self._play_next(ctx), self.bot.loop))
-            await ctx.send(f"▶️ Now playing: {track} (requested by {requested_by.mention})")
+            source = await play_song(
+                vc,
+                track,
+                return_source=True,
+                bass_boost=music_manager.user_bass_boost.get(requested_by.id, False)
+            )
+            vc.play(
+                source,
+                after=lambda e: asyncio.run_coroutine_threadsafe(
+                    self._play_next(interaction),
+                    self.bot.loop
+                )
+            )
+            await interaction.followup.send(
+                f"▶️ Now playing: {track} (requested by {requested_by.mention})"
+            )
         except Exception as e:
-            await ctx.send(f"❌ Error playing next track: {e}")
+            await interaction.followup.send(f"❌ Error playing next track: {e}")
+

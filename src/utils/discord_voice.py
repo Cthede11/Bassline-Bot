@@ -1,10 +1,10 @@
-
 import time
 import discord
 import yt_dlp
 import asyncio
 import functools
-
+import glob
+import os
 
 # ANSI color codes
 class LogColors:
@@ -18,13 +18,13 @@ class LogColors:
 def log(tag, message, color=LogColors.RESET):
     print(f"{color}[{tag}]{LogColors.RESET} {message}")
 
-async def join_voice_channel(ctx):
-    user_channel = ctx.author.voice.channel if ctx.author.voice else None
+async def join_voice_channel(interaction):
+    user_channel = interaction.user.voice.channel if interaction.user.voice else None
     if not user_channel:
-        await ctx.send("❌ You must be in a voice channel to use this command.")
+        await interaction.response.send_message("❌ You must be in a voice channel to use this command.")
         return None
 
-    bot_voice = ctx.guild.voice_client
+    bot_voice = interaction.guild.voice_client
     if not bot_voice:
         log("VOICE", f"Bot joining channel: {user_channel.name}", LogColors.GREEN)
         return await user_channel.connect()
@@ -35,8 +35,15 @@ async def join_voice_channel(ctx):
 
     return bot_voice
 
-async def play_song(voice_client, search_query, return_source=False):
+async def play_song(voice_client, search_query, return_source=False, bass_boost=False, download_first=False):
+    import os
+    import uuid
+
     start = time.time()
+
+    # Ensure downloads folder exists
+    if download_first:
+        os.makedirs("downloads", exist_ok=True)
 
     ydl_opts = {
         'format': 'bestaudio[ext=webm]/bestaudio/best',
@@ -48,42 +55,55 @@ async def play_song(voice_client, search_query, return_source=False):
         'forcejson': True,
     }
 
+    if download_first:
+        ydl_opts['outtmpl'] = 'downloads/%(title)s.%(ext)s'
+
     loop = asyncio.get_event_loop()
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            # Run in executor to keep it responsive
-            info = await loop.run_in_executor(None, functools.partial(ydl.extract_info, f"{search_query} full song", False))
+            info = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    ydl.extract_info,
+                    f"{search_query} full song",
+                    not download_first  # download=False if streaming, True if downloading
+                )
+            )
         except Exception as e:
             if 'DRM' in str(e).upper():
                 raise Exception("🚫 The selected track is DRM-protected and cannot be played.")
             raise Exception(f"❌ yt_dlp error: {str(e)}")
 
-        except yt_dlp.utils.DownloadError as e:
-            log("ERROR", f"yt_dlp failed: {e}", LogColors.RED)
-            raise Exception(f"❌ yt_dlp error: {str(e)}")
-
         entries = info.get('entries') or [info]
-        playlist_detected = 'entries' in info
-        if playlist_detected:
-            log("QUEUE", f"Playlist detected: {len(entries)} tracks", LogColors.CYAN)
-
-        selected = next((e for e in entries if e.get("duration", 0) >= 90), None)
+        selected = next((e for e in entries if e.get("duration", 0) >= 20), None)
         if not selected:
             raise Exception(f"No suitable result for: {search_query}")
 
-        stream_url = selected['url']
+        if download_first:
+            stream_url = ydl.prepare_filename(selected)
+        else:
+            stream_url = selected['url']
+
         title = selected.get("title", "Unknown")
         duration = selected.get("duration", 0)
 
         log("PLAY", f"Title: {title}", LogColors.BLUE)
         log("PLAY", f"Duration: {duration}s", LogColors.BLUE)
-        log("PLAY", f"Stream URL: {stream_url}", LogColors.BLUE)
+        log("PLAY", f"{'File path' if download_first else 'Stream URL'}: {stream_url}", LogColors.BLUE)
 
         ffmpeg_options = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn',
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5' if not download_first else '',
+            'options': '',
         }
+
+        if bass_boost:
+            eq_filter = 'bass=g=6:f=80:w=0.8'
+            ffmpeg_options['options'] = f"-vn -af {eq_filter}"
+        else:
+            ffmpeg_options['options'] = '-vn'
+
+        log("FFMPEG", f"Using filter: {ffmpeg_options['options']}", LogColors.YELLOW)
 
         source = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
 
