@@ -1,13 +1,48 @@
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands, Interaction, Embed, ButtonStyle, SelectOption, Object
+from discord import app_commands, Interaction, Embed, Role 
 from discord.ui import Button, View, Select
 import asyncio
 import time
 import traceback 
 
 from src.utils.discord_voice import join_voice_channel, play_song, search_youtube, LogColors, log
-from src.utils.music import music_manager, LoopState
+from src.utils.music import music_manager, LoopState 
+
+# --- Custom Check for DJ Role or Admin ---
+def is_dj_or_admin():
+    """Custom check to see if the user is an admin or has the DJ role."""
+    async def predicate(interaction: Interaction) -> bool:
+        if not interaction.guild: 
+            # This should ideally not happen for guild commands but good to check
+            log("DJ_CHECK_ERROR", "is_dj_or_admin check used outside of a guild context.", LogColors.RED)
+            return False 
+        
+        # Check if user is an administrator
+        if interaction.user.guild_permissions.administrator:
+            return True 
+
+        guild_id = interaction.guild.id
+        dj_role_id = music_manager.get_dj_role_id(guild_id)
+
+        if dj_role_id:
+            # Check if user has the DJ role
+            # Ensure interaction.user is a Member object to access roles
+            if isinstance(interaction.user, discord.Member):
+                dj_role = interaction.guild.get_role(dj_role_id)
+                if dj_role and dj_role in interaction.user.roles:
+                    return True 
+            else: # Should not happen with slash commands from guilds
+                log("DJ_CHECK_ERROR", f"User object type is not Member: {type(interaction.user)}", LogColors.YELLOW)
+
+
+        # If no DJ role is set, or user doesn't have it, this check fails.
+        # The message is now part of the CheckFailure exception.
+        raise app_commands.CheckFailure(
+            "You need to be an Administrator or have the designated DJ role to use this command. "
+            "An admin can set the DJ role using `/setdjrole`."
+        )
+    return app_commands.check(predicate)
 
 class PlayCommand(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -22,7 +57,6 @@ class PlayCommand(commands.Cog):
         self.active_search_views.clear()
 
     def format_duration(self, seconds, include_hours_if_zero=False):
-        # ... (same as before)
         if seconds is None: return "N/A"
         try: seconds = int(seconds)
         except (ValueError, TypeError): return "N/A"
@@ -33,36 +67,50 @@ class PlayCommand(commands.Cog):
         return f"{minutes:02d}:{seconds:02d}"
 
     async def send_now_playing_embed(self, interaction_or_context, guild_id, is_followup=False, from_play_next=False):
-        # ... (same as before, logging is already minimal here)
         now_playing_info = music_manager.get_now_playing(guild_id)
         target_channel = None
         if isinstance(interaction_or_context, Interaction): target_channel = interaction_or_context.channel
         elif isinstance(interaction_or_context, discord.TextChannel): target_channel = interaction_or_context
         elif hasattr(interaction_or_context, 'channel') and isinstance(interaction_or_context.channel, discord.abc.Messageable): target_channel = interaction_or_context.channel
+        
         if not target_channel: 
             guild = self.bot.get_guild(guild_id)
             if guild:
-                if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages: target_channel = guild.system_channel
+                if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages: 
+                    target_channel = guild.system_channel
                 else:
                     for tc in guild.text_channels:
-                        if tc.permissions_for(guild.me).send_messages: target_channel = tc; break
-        if not target_channel: log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Could not determine target channel for guild {guild_id}.", LogColors.RED); return
+                        if tc.permissions_for(guild.me).send_messages: 
+                            target_channel = tc; break
+        if not target_channel: 
+            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Could not determine target channel for guild {guild_id}.", LogColors.RED)
+            return
+            
         if not now_playing_info:
             if isinstance(interaction_or_context, Interaction) and not from_play_next:
                 message_content = "Nothing is currently playing."
                 if is_followup: await interaction_or_context.followup.send(message_content, ephemeral=True)
                 else: await interaction_or_context.response.send_message(message_content, ephemeral=True)
             return
+
         embed = Embed(title="🎶 Now Playing 🎶", color=discord.Color.random())
         embed.add_field(name="Title", value=f"[{now_playing_info['title']}]({now_playing_info.get('url', '#')})", inline=False)
-        current_time = time.time(); elapsed_time = current_time - now_playing_info.get("start_time", current_time); total_duration = now_playing_info.get("duration", 0)
-        bar_length = 20; progress = min(1.0, elapsed_time / total_duration) if total_duration and total_duration > 0 else 0; filled_length = int(bar_length * progress)
-        bar = '█' * filled_length + '─' * (bar_length - filled_length); progress_str = f"`{self.format_duration(elapsed_time)} / {self.format_duration(total_duration)}`\n`{bar}`"
+        current_time = time.time()
+        elapsed_time = current_time - now_playing_info.get("start_time", current_time)
+        total_duration = now_playing_info.get("duration", 0)
+        bar_length = 20
+        progress = min(1.0, elapsed_time / total_duration) if total_duration and total_duration > 0 else 0
+        filled_length = int(bar_length * progress)
+        bar = '█' * filled_length + '─' * (bar_length - filled_length)
+        progress_str = f"`{self.format_duration(elapsed_time)} / {self.format_duration(total_duration)}`\n`{bar}`"
         embed.add_field(name="Progress", value=progress_str, inline=False)
-        embed.add_field(name="Requested by", value=now_playing_info["requester"], inline=True); embed.add_field(name="Uploader", value=now_playing_info.get("uploader", "N/A"), inline=True)
-        loop_state = music_manager.get_loop_state(guild_id); embed.add_field(name="Loop", value=f"```{loop_state.name.capitalize()}```", inline=True)
+        embed.add_field(name="Requested by", value=now_playing_info["requester"], inline=True)
+        embed.add_field(name="Uploader", value=now_playing_info.get("uploader", "N/A"), inline=True)
+        loop_state = music_manager.get_loop_state(guild_id)
+        embed.add_field(name="Loop", value=f"```{loop_state.name.capitalize()}```", inline=True)
         if now_playing_info.get("thumbnail"): embed.set_thumbnail(url=now_playing_info["thumbnail"])
         embed.set_footer(text=f"BasslineBot | {time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        
         try:
             if isinstance(interaction_or_context, Interaction):
                 if from_play_next: await target_channel.send(embed=embed)
@@ -73,7 +121,9 @@ class PlayCommand(commands.Cog):
             if target_channel: 
                 try: await target_channel.send(embed=embed)
                 except Exception as e_raw_send: log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Raw channel send also failed - {e_raw_send}", LogColors.RED)
-        except Exception as e: log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Error sending - {e}", LogColors.RED); traceback.print_exc()
+        except Exception as e: 
+            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Error sending - {e}", LogColors.RED)
+            traceback.print_exc()
 
     async def _play_next(self, interaction_context: Interaction, error=None, retry_count=0): 
         MAX_RETRIES_PER_SONG = 1 
@@ -97,8 +147,7 @@ class PlayCommand(commands.Cog):
         track_to_play_query = None; requested_by_obj = None
 
         if current_loop_state == LoopState.SINGLE and song_that_just_finished and retry_count == 0:
-            track_to_play_query = song_that_just_finished.get("query")
-            requested_by_obj = song_that_just_finished.get("requested_by_obj")
+            track_to_play_query = song_that_just_finished.get("query"); requested_by_obj = song_that_just_finished.get("requested_by_obj")
         else:
             next_in_queue = music_manager.get_next(guild_id)
             if next_in_queue and next_in_queue[0]:
@@ -120,7 +169,7 @@ class PlayCommand(commands.Cog):
             return
 
         log(log_prefix + "ATTEMPTING_PLAY", f"Attempting to play '{track_to_play_query}' (Retry: {retry_count})", LogColors.CYAN)
-        playback_exception = None # To store exception from play_song
+        playback_exception = None
         try:
             vc = interaction_context.guild.voice_client 
             if not vc or not vc.is_connected():
@@ -128,82 +177,97 @@ class PlayCommand(commands.Cog):
                 music_manager.clear_guild_state(guild_id)
                 if interaction_context.channel: await interaction_context.channel.send("⚠️ I was disconnected before I could play the next song.")
                 return
-
             bass_boost = music_manager.get_bass_boost(requested_by_obj.id)
             song_details = await play_song(vc, track_to_play_query, return_source=True, bass_boost=bass_boost, download_first=True)
-            
             if not song_details or "source" not in song_details:
                 log(log_prefix + "PLAY_SONG_FAIL_NO_SOURCE", f"play_song did not return a valid source for '{track_to_play_query}'.", LogColors.RED)
                 raise Exception("Song processing failed: No audio source found.")
-
             actual_audio_source = song_details["source"]
-            music_manager.set_now_playing(guild_id, {
-                "title": song_details["title"], "duration": song_details["duration"],
-                "thumbnail": song_details.get("thumbnail"), "query": track_to_play_query,
-                "start_time": time.time(), "url": song_details.get("webpage_url"),
-                "uploader": song_details.get("uploader")}, requested_by_obj)
-
-            await asyncio.sleep(0.1) 
-            vc = interaction_context.guild.voice_client 
+            music_manager.set_now_playing(guild_id, {"title": song_details["title"], "duration": song_details["duration"], "thumbnail": song_details.get("thumbnail"), "query": track_to_play_query, "start_time": time.time(), "url": song_details.get("webpage_url"), "uploader": song_details.get("uploader")}, requested_by_obj)
+            await asyncio.sleep(0.1); vc = interaction_context.guild.voice_client 
             if not vc or not vc.is_connected():
                 log(log_prefix + "VC_DISCONNECTED_PRE_VC_PLAY", "VC disconnected right before vc.play(). Aborting this track.", LogColors.RED)
-                asyncio.create_task(self._play_next(interaction_context, error="VC Disconnected Pre-Play", retry_count=MAX_RETRIES_PER_SONG + 1)) 
-                return
-
+                asyncio.create_task(self._play_next(interaction_context, error="VC Disconnected Pre-Play", retry_count=MAX_RETRIES_PER_SONG + 1)); return
+            
             def after_playback_hook(error_from_player):
-                hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_PLAYBACK_HOOK "
-                effective_error = error_from_player
-                current_song_info = music_manager.get_now_playing(guild_id) # Get song that was *supposed* to play
-
+                hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_PLAYBACK_HOOK "; effective_error = error_from_player
+                current_song_info = music_manager.get_now_playing(guild_id)
                 if error_from_player is None and current_song_info:
-                    playback_start_time = current_song_info.get("start_time", 0)
-                    expected_duration = current_song_info.get("duration", 0)
-                    # If playback_start_time is 0, it means set_now_playing might not have run or was cleared
+                    playback_start_time = current_song_info.get("start_time", 0); expected_duration = current_song_info.get("duration", 0)
                     if playback_start_time > 0:
                         actual_play_time = time.time() - playback_start_time
-                        # If a song has substantial duration but "finished" very quickly without player error
                         if expected_duration > 3 and actual_play_time < 1.5: 
-                            silent_fail_msg = f"Playback finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s). Likely an issue with the audio source/FFmpeg."
-                            log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW)
-                            effective_error = Exception(silent_fail_msg) 
-                
+                            silent_fail_msg = f"Playback finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s). Likely an issue with the audio source or FFmpeg."
+                            log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW); effective_error = Exception(silent_fail_msg) 
                 log(hook_log_prefix + "TRIGGERED", f"For song '{current_song_info.get('query') if current_song_info else 'N/A'}'. Player Error: '{error_from_player}', Effective Error: '{effective_error}'", LogColors.CYAN)
-                
-                asyncio.run_coroutine_threadsafe(
-                    self._play_next(interaction_context, error=effective_error, retry_count=0),
-                    self.bot.loop
-                )
-
+                asyncio.run_coroutine_threadsafe(self._play_next(interaction_context, error=effective_error, retry_count=0), self.bot.loop)
+            
             vc.play(actual_audio_source, after=after_playback_hook)
             log(log_prefix + "PLAYBACK_STARTED", f"vc.play() called for '{track_to_play_query}'.", LogColors.GREEN)
             await self.send_now_playing_embed(interaction_context.channel if interaction_context else None, guild_id, from_play_next=True)
-            return # Successfully started playback
-
-        except Exception as e_play: 
-            playback_exception = e_play # Store the exception from play_song
-            log(log_prefix + "PLAY_EXCEPTION", f"Failed to prepare or start playback for '{track_to_play_query}': {type(e_play).__name__}: {e_play}", LogColors.RED)
-            traceback.print_exc() 
-            
-        # This block is reached if play_song (or pre-play checks) raised an exception
+            return 
+        except Exception as e_play: playback_exception = e_play
+        
+        log(log_prefix + "PLAY_EXCEPTION", f"Failed to prepare or start playback for '{track_to_play_query}': {type(playback_exception).__name__}: {playback_exception}", LogColors.RED); traceback.print_exc() 
         if retry_count < MAX_RETRIES_PER_SONG:
             log(log_prefix + "RETRYING_SONG", f"Retrying '{track_to_play_query}' due to error: {playback_exception} (Attempt {retry_count + 1}/{MAX_RETRIES_PER_SONG}).", LogColors.YELLOW)
-            await asyncio.sleep(1) 
-            asyncio.create_task(self._play_next(interaction_context, error=playback_exception, retry_count=retry_count + 1))
+            await asyncio.sleep(1); asyncio.create_task(self._play_next(interaction_context, error=playback_exception, retry_count=retry_count + 1))
         else:
             log(log_prefix + "MAX_RETRIES_REACHED", f"Max retries for '{track_to_play_query}'. Error: {playback_exception}. Skipping.", LogColors.RED)
             if interaction_context and interaction_context.channel:
-                try: 
-                    await interaction_context.channel.send(
-                        f"❌ Failed to play '{track_to_play_query[:70]}...' due to: `{str(playback_exception)[:100]}`. Skipping."
-                    )
-                except Exception as e_msg_skip: 
-                    log(log_prefix + "SKIP_MSG_FAIL", f"Failed to send skip message: {e_msg_skip}", LogColors.YELLOW)
-            asyncio.create_task(self._play_next(interaction_context, error=None, retry_count=0)) # Move to next song
+                try: await interaction_context.channel.send(f"❌ Failed to play '{track_to_play_query[:70]}...' due to: `{str(playback_exception)[:100]}`. Skipping.")
+                except Exception as e_msg_skip: log(log_prefix + "SKIP_MSG_FAIL", f"Failed to send skip message: {e_msg_skip}", LogColors.YELLOW)
+            asyncio.create_task(self._play_next(interaction_context, error=None, retry_count=0))
+
+    # --- DJ Role Management Commands ---
+    @app_commands.command(name="setdjrole", description="Sets the DJ role for this server (Admin only).")
+    @app_commands.describe(role="The role to designate as the DJ role.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_dj_role(self, interaction: Interaction, role: Role):
+        guild_id = interaction.guild.id
+        music_manager.set_dj_role(guild_id, role.id)
+        await interaction.response.send_message(f"🎧 DJ role has been set to **{role.mention}**.", ephemeral=True)
+
+    @set_dj_role.error
+    async def set_dj_role_error(self, interaction: Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("❌ You must be an Administrator to use this command.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"❌ An error occurred: {error}", ephemeral=True)
+            log("SET_DJ_ROLE_ERROR", f"Error in /setdjrole: {error}", LogColors.RED)
+
+    @app_commands.command(name="cleardjrole", description="Clears the DJ role for this server (Admin only).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def clear_dj_role(self, interaction: Interaction):
+        guild_id = interaction.guild.id
+        music_manager.set_dj_role(guild_id, None) 
+        await interaction.response.send_message("🎧 DJ role has been cleared. Only administrators can now use DJ commands (if not set otherwise).", ephemeral=True)
+
+    @clear_dj_role.error
+    async def clear_dj_role_error(self, interaction: Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("❌ You must be an Administrator to use this command.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"❌ An error occurred: {error}", ephemeral=True)
+            log("CLEAR_DJ_ROLE_ERROR", f"Error in /cleardjrole: {error}", LogColors.RED)
+            
+    @app_commands.command(name="checkdjrole", description="Checks the currently configured DJ role for this server.")
+    async def check_dj_role(self, interaction: Interaction):
+        guild_id = interaction.guild.id
+        dj_role_id = music_manager.get_dj_role_id(guild_id)
+        if dj_role_id:
+            role = interaction.guild.get_role(dj_role_id)
+            if role:
+                await interaction.response.send_message(f"🎧 The current DJ role is **{role.mention}** (`{role.id}`).", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"🎧 A DJ role ID (`{dj_role_id}`) is set, but the role was not found. An admin should use `/setdjrole` or `/cleardjrole`.", ephemeral=True)
+        else:
+            await interaction.response.send_message("🎧 No DJ role is currently set. Only administrators can use DJ-restricted commands by default.", ephemeral=True)
 
 
+    # --- Music Commands ---
     @app_commands.command(name="play", description="Play a song by name or URL.")
     async def play(self, interaction: Interaction, query: str):
-        # ... (implementation as before, ensure its _play_next call in 'after' is robust)
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         await interaction.response.defer(); log_prefix = f"[PLAY_CMD Guild: {guild_id}] "
         vc = music_manager.voice_clients.get(guild_id)
@@ -226,8 +290,7 @@ class PlayCommand(commands.Cog):
             actual_audio_source = song_details["source"]
             music_manager.set_now_playing(guild_id, {"title": song_details["title"], "duration": song_details["duration"], "thumbnail": song_details.get("thumbnail"), "query": query, "start_time": time.time(), "url": song_details.get("webpage_url"), "uploader": song_details.get("uploader")}, interaction.user)
             def after_initial_playback_hook(error_from_player):
-                hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_INITIAL_PLAY_HOOK "
-                effective_error = error_from_player
+                hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_INITIAL_PLAY_HOOK "; effective_error = error_from_player
                 current_song_info = music_manager.get_now_playing(guild_id)
                 if error_from_player is None and current_song_info:
                     playback_start_time = current_song_info.get("start_time", 0); expected_duration = current_song_info.get("duration", 0)
@@ -235,8 +298,7 @@ class PlayCommand(commands.Cog):
                         actual_play_time = time.time() - playback_start_time
                         if expected_duration > 3 and actual_play_time < 1.5:
                             silent_fail_msg = f"Initial song finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s)."
-                            log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW)
-                            effective_error = Exception(silent_fail_msg)
+                            log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW); effective_error = Exception(silent_fail_msg)
                 log(hook_log_prefix + "TRIGGERED", f"For initial song '{query}'. Player Error: '{error_from_player}', Effective Error: '{effective_error}'", LogColors.CYAN)
                 asyncio.run_coroutine_threadsafe(self._play_next(interaction, error=effective_error, retry_count=0), self.bot.loop)
             await asyncio.sleep(0.1); vc = interaction.guild.voice_client 
@@ -251,6 +313,7 @@ class PlayCommand(commands.Cog):
             await interaction.followup.send(f"❌ Error playing '{query[:100]}...': {str(e)[:1500]}")
 
     @app_commands.command(name="loop", description="Set the loop mode for playback.")
+    @is_dj_or_admin()
     @app_commands.choices(mode=[
         app_commands.Choice(name="Off", value=LoopState.OFF.value),
         app_commands.Choice(name="Single Song", value=LoopState.SINGLE.value),
@@ -268,7 +331,6 @@ class PlayCommand(commands.Cog):
 
     @app_commands.command(name="search", description="Search for a song on YouTube and select from results.")
     async def search(self, interaction: Interaction, query: str):
-        # ... (implementation as before, ensure its _play_next call in after_search_select_playback_hook is robust)
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         await interaction.response.defer()
         results = await search_youtube(query, num_results=5) 
@@ -300,11 +362,11 @@ class PlayCommand(commands.Cog):
                 selected_track_info = current_search_results[selected_index]
                 selected_track_query = selected_track_info["query_for_play"]; selected_track_title = selected_track_info["title"]
                 music_manager.update_last_activity(guild_id)
-                vc = music_manager.voice_clients.get(guild_id)
-                if not vc or not vc.is_connected():
+                vc = music_manager.voice_clients.get(guild_id) 
+                if not vc or not vc.is_connected(): 
                     vc = await join_voice_channel(select_interaction) 
                     if not vc: await self.stop_and_disable_view(self.original_interaction); return 
-                    music_manager.voice_clients[guild_id] = vc
+                    music_manager.voice_clients[guild_id] = vc 
                 if music_manager.is_playing(guild_id) or music_manager.get_queue(guild_id):
                     await music_manager.add_to_queue(guild_id, selected_track_query, select_interaction.user)
                     await select_interaction.followup.send(f"✅ **{selected_track_title}** added to queue.", ephemeral=False)
@@ -321,16 +383,14 @@ class PlayCommand(commands.Cog):
                             await select_interaction.followup.send("⚠️ I was disconnected. Please try playing again.", ephemeral=True)
                             await self.stop_and_disable_view(self.original_interaction); return
                         def after_search_select_playback_hook(error_from_player):
-                            hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_SEARCH_SELECT_PLAY_HOOK "
-                            effective_error = error_from_player; current_song_info = music_manager.get_now_playing(guild_id)
+                            hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_SEARCH_SELECT_PLAY_HOOK "; effective_error = error_from_player; current_song_info = music_manager.get_now_playing(guild_id)
                             if error_from_player is None and current_song_info:
                                 playback_start_time = current_song_info.get("start_time", 0); expected_duration = current_song_info.get("duration", 0)
                                 if playback_start_time > 0:
                                     actual_play_time = time.time() - playback_start_time
                                     if expected_duration > 3 and actual_play_time < 1.5:
                                         silent_fail_msg = f"Search selection finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s)."
-                                        log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW)
-                                        effective_error = Exception(silent_fail_msg)
+                                        log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW); effective_error = Exception(silent_fail_msg)
                             log(hook_log_prefix + "TRIGGERED", f"For '{selected_track_title}'. Player Error: '{error_from_player}', Effective: '{effective_error}'", LogColors.CYAN)
                             asyncio.run_coroutine_threadsafe(self.cog_instance._play_next(select_interaction, error=effective_error, retry_count=0), self.cog_instance.bot.loop)
                         vc.play(source, after=after_search_select_playback_hook)
@@ -354,6 +414,7 @@ class PlayCommand(commands.Cog):
         await interaction.followup.send(embed=embed, view=search_view_instance)
 
     @app_commands.command(name="skip", description="Skips the currently playing song.")
+    @is_dj_or_admin()
     async def skip(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         vc = music_manager.voice_clients.get(guild_id)
@@ -375,6 +436,7 @@ class PlayCommand(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="pause", description="Pauses the current song.")
+    @is_dj_or_admin()
     async def pause(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         vc = music_manager.voice_clients.get(guild_id)
@@ -383,6 +445,7 @@ class PlayCommand(commands.Cog):
         else: await interaction.response.send_message("Nothing is playing to pause.", ephemeral=True)
 
     @app_commands.command(name="resume", description="Resumes the current song.")
+    @is_dj_or_admin()
     async def resume(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         vc = music_manager.voice_clients.get(guild_id)
@@ -390,25 +453,28 @@ class PlayCommand(commands.Cog):
         else: await interaction.response.send_message("No paused song to resume.", ephemeral=True)
 
     @app_commands.command(name="shuffle", description="Shuffles the current queue.")
+    @is_dj_or_admin()
     async def shuffle(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         if not music_manager.get_queue(guild_id): await interaction.response.send_message("Nothing in queue to shuffle.", ephemeral=True); return
         music_manager.shuffle_queue(guild_id); await interaction.response.send_message("🔀 Queue shuffled.")
 
     @app_commands.command(name="clear", description="Clears the current queue.")
+    @is_dj_or_admin()
     async def clear(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
         music_manager.clear_queue(guild_id); await interaction.response.send_message("🗑️ Queue cleared.")
 
     @app_commands.command(name="stop", description="Stops music, clears queue, and disconnects.")
+    @is_dj_or_admin()
     async def stop(self, interaction: Interaction):
         guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id) 
         vc = music_manager.voice_clients.get(guild_id)
         if vc and vc.is_connected():
             if vc.is_playing() or vc.is_paused(): vc.stop() 
-            await vc.disconnect() # This will trigger on_voice_state_update which calls clear_guild_state
+            await vc.disconnect()
             log("STOP_CMD", f"Stopped by user and called disconnect for '{interaction.guild.name}'.", LogColors.YELLOW)
-        else: # If not connected, still ensure state is clear
+        else: 
             music_manager.clear_guild_state(guild_id) 
         await interaction.response.send_message("⏹️ Music stopped, queue cleared, and disconnected.")
 
@@ -438,12 +504,25 @@ class PlayCommand(commands.Cog):
             log("CLEAN_CMD_ERROR", f"An error occurred while cleaning messages: {e}", LogColors.RED); traceback.print_exc()
             await interaction.followup.send(f"An error occurred while cleaning messages: {str(e)[:1000]}", ephemeral=True)
 
-    @clean.error
-    async def clean_command_error_handler(self, interaction: Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.MissingPermissions): await interaction.response.send_message("You need the `Manage Messages` permission to use this command.", ephemeral=True)
+    async def cog_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CheckFailure):
+            if "You need to be an Administrator or have the designated DJ role" in str(error):
+                 await interaction.response.send_message(str(error), ephemeral=True)
+            else: 
+                await interaction.response.send_message(f"A permission check failed: {error}", ephemeral=True)
+        elif isinstance(error, app_commands.MissingPermissions): 
+            perms_needed = ", ".join(error.missing_permissions)
+            await interaction.response.send_message(f"❌ You are missing the following permission(s) to use this command: `{perms_needed}`", ephemeral=True)
         else:
-            log("CLEAN_CMD_UNHANDLED_ERROR", f"Unexpected error in clean command: {error}", LogColors.RED); traceback.print_exc()
-            await interaction.response.send_message(f"An error occurred: {str(error)[:1000]}", ephemeral=True)
+            log("APP_COMMAND_ERROR", f"Unhandled error in PlayCommand: {error} for command {interaction.command.name if interaction.command else 'N/A'}", LogColors.RED)
+            traceback.print_exc()
+            if not interaction.response.is_done():
+                await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
+            else:
+                try:
+                    await interaction.followup.send("An unexpected error occurred.", ephemeral=True)
+                except discord.errors.NotFound: 
+                    pass
 
     @tasks.loop(minutes=1.0) 
     async def idle_check_task(self):
@@ -469,8 +548,7 @@ class PlayCommand(commands.Cog):
                     if text_channel_to_notify:
                         try: await text_channel_to_notify.send(f"👋 Disconnecting from {vc.channel.mention}. Reason: {reason_to_leave}")
                         except Exception as e_msg: log("IDLE_MSG_ERROR", f"Failed to send idle leave message to {text_channel_to_notify.name}: {e_msg}", LogColors.YELLOW)
-                    # vc.stop() will be called by on_voice_state_update if it's playing
-                    await vc.disconnect() # This will trigger on_voice_state_update
+                    await vc.disconnect(); 
             elif guild_id in music_manager.voice_clients: 
                 music_manager.clear_guild_state(guild_id)
 

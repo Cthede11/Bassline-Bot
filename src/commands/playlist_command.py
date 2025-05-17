@@ -8,6 +8,15 @@ import traceback
 
 from src.utils.discord_voice import join_voice_channel, play_song, LogColors, log 
 from src.utils.music import music_manager, LoopState 
+# Import the check from play.py or a shared utility file
+# For now, assuming it might be defined in play.py and we'd ideally move it to a shared utils.checks
+# If is_dj_or_admin is in play.py, this direct import won't work cleanly without circular dependencies.
+# A better solution is to move is_dj_or_admin to a new file like src/utils/checks.py
+# For this example, I'll assume it's accessible or we're not applying it directly to /playlist command itself.
+# from src.commands.play import is_dj_or_admin # This would be ideal if check is sharable
+
+# If you want to restrict /playlist command itself, you'd need the check:
+# from .play import is_dj_or_admin # If in same directory and play.py has it.
 
 class PlaylistCommand(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -15,7 +24,7 @@ class PlaylistCommand(commands.Cog):
         self.playlist_category_name = "🎵 Custom Playlists"
 
     def format_duration(self, seconds, include_hours_if_zero=False):
-        # ... (same as before)
+        # ... (implementation as before)
         if seconds is None: return "N/A"
         try: seconds = int(seconds)
         except (ValueError, TypeError): return "N/A"
@@ -26,7 +35,7 @@ class PlaylistCommand(commands.Cog):
         return f"{minutes:02d}:{seconds:02d}"
 
     async def send_now_playing_embed(self, interaction_or_context, guild_id, is_followup=False, from_play_next=False):
-        # ... (same as before, logging is already minimal here)
+        # ... (implementation as before)
         now_playing_info = music_manager.get_now_playing(guild_id)
         target_channel = None
         if isinstance(interaction_or_context, Interaction): target_channel = interaction_or_context.channel
@@ -63,10 +72,9 @@ class PlaylistCommand(commands.Cog):
                 except Exception as e_raw_send: log("EMBED_SEND_ERROR", f"PlaylistCmd NowPlaying: Raw channel send also failed - {e_raw_send}", LogColors.RED)
         except Exception as e: log("EMBED_SEND_ERROR", f"PlaylistCmd NowPlaying: Error sending - {e}", LogColors.RED)
 
-    @app_commands.command(name="setupplaylists", description="Create a category for storing custom playlists (admin).")
+    @app_commands.command(name="setupplaylists", description="Create a category for storing custom playlists (Admin only).")
     @app_commands.checks.has_permissions(manage_channels=True)
     async def setup_playlists(self, interaction: Interaction):
-        # ... (implementation as before)
         guild = interaction.guild
         category = discord.utils.get(guild.categories, name=self.playlist_category_name)
         if not category:
@@ -88,10 +96,9 @@ class PlaylistCommand(commands.Cog):
             await interaction.response.send_message(f"❌ An error occurred: {error}", ephemeral=True)
 
 
-    @app_commands.command(name="createplaylist", description="Create a new playlist channel (admin).")
+    @app_commands.command(name="createplaylist", description="Create a new playlist channel (Admin only).")
     @app_commands.checks.has_permissions(manage_channels=True)
     async def create_playlist(self, interaction: Interaction, playlist_name: str):
-        # ... (implementation as before)
         guild = interaction.guild
         category = discord.utils.get(guild.categories, name=self.playlist_category_name)
         if not category:
@@ -128,6 +135,8 @@ class PlaylistCommand(commands.Cog):
 
     @app_commands.command(name="playlist", description="Play songs from a custom playlist channel.")
     @app_commands.describe(playlist_identifier="Name of the playlist or #channel-mention")
+    # If you want to restrict /playlist itself:
+    # @is_dj_or_admin() 
     async def play_playlist(self, interaction: Interaction, playlist_identifier: str):
         log_prefix_cmd = f"[PLAYLIST_CMD Guild: {interaction.guild.id}] "
         log(log_prefix_cmd + "START", f"Received /playlist for '{playlist_identifier}' by {interaction.user}", LogColors.CYAN)
@@ -239,7 +248,7 @@ class PlaylistCommand(commands.Cog):
         if not vc or not vc.is_connected():
             log(log_prefix + "VC_ISSUE", "VC not found or not connected at start of _play_next. Stopping.", LogColors.YELLOW)
             music_manager.clear_guild_state(guild_id)
-            if interaction_context.channel and not interaction_context.response.is_done(): # Should be done if called from command
+            if interaction_context.channel and not interaction_context.response.is_done():
                 try: await interaction_context.channel.send("I've been disconnected from voice. Playback stopped.")
                 except: pass
             return
@@ -310,13 +319,12 @@ class PlaylistCommand(commands.Cog):
                 if error_from_player is None and current_song_info:
                     playback_start_time = current_song_info.get("start_time", 0)
                     expected_duration = current_song_info.get("duration", 0)
-                    if playback_start_time > 0: # Ensure start_time was set
+                    if playback_start_time > 0: 
                         actual_play_time = time.time() - playback_start_time
-                        # If a song has substantial duration but "finished" very quickly
-                        if expected_duration > 3 and actual_play_time < 1.5: # Thresholds can be tuned
+                        if expected_duration > 3 and actual_play_time < 1.5: 
                             silent_fail_msg = f"Playback finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s). Likely an issue with the audio source or FFmpeg."
                             log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW)
-                            effective_error = Exception(silent_fail_msg) # Create a synthetic error to trigger retry/skip
+                            effective_error = Exception(silent_fail_msg) 
                 
                 log(hook_log_prefix + "TRIGGERED", f"For song '{current_song_info.get('query') if current_song_info else 'N/A'}'. Player Error: '{error_from_player}', Effective Error for Retry: '{effective_error}'", LogColors.CYAN)
                 
@@ -328,14 +336,13 @@ class PlaylistCommand(commands.Cog):
             vc.play(actual_audio_source, after=after_playback_hook)
             log(log_prefix + "PLAYBACK_STARTED", f"vc.play() called for '{track_to_play_query}'.", LogColors.GREEN)
             await self.send_now_playing_embed(interaction_context.channel if interaction_context else None, guild_id, from_play_next=True)
-            return # Playback started successfully
+            return 
 
         except Exception as e_play: 
             playback_exception = e_play
             log(log_prefix + "PLAY_EXCEPTION", f"Failed to prepare or start playback for '{track_to_play_query}': {type(e_play).__name__}: {e_play}", LogColors.RED)
             traceback.print_exc() 
             
-        # This block is reached if play_song (or pre-play checks) raised an exception (playback_exception is set)
         if retry_count < MAX_RETRIES_PER_SONG:
             log(log_prefix + "RETRYING_SONG", f"Retrying '{track_to_play_query}' due to error: {playback_exception} (Attempt {retry_count + 1}/{MAX_RETRIES_PER_SONG}).", LogColors.YELLOW)
             await asyncio.sleep(1) 
