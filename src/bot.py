@@ -2,30 +2,24 @@ import sys
 import os
 import discord
 import asyncio
-import traceback # For catching exceptions in main
+import traceback 
 from discord.ext import commands
-# from discord import app_commands # app_commands is part of discord.ext.commands.Bot.tree
 from src.config.settings import DISCORD_TOKEN
+from src.commands.play import PlayCommand 
+from src.commands.playlist_command import PlaylistCommand 
+from src.utils.music import music_manager # Import music_manager
+from src.utils.discord_voice import LogColors, log # For logging
 
-# Assuming your cogs are correctly imported
-from src.commands.play import PlayCommand # Ensure this path is correct
-from src.commands.playlist_command import PlaylistCommand # Ensure this path is correct
-
-# Define intents clearly
 intents = discord.Intents.default()
-intents.message_content = True # Only if you need it for non-slash command features
+intents.message_content = True 
 intents.guilds = True
-intents.voice_states = True
-# intents.messages = True # Only if you need to read general message history beyond commands
+intents.voice_states = True # Essential for on_voice_state_update
 
 class BasslineBot(commands.Bot):
     def __init__(self):
-        # Using when_mentioned_or with a prefix like "!" allows for potential text commands later
-        # For a slash-command-only bot, command_prefix is less critical but good to define.
         super().__init__(command_prefix=commands.when_mentioned_or("!bl "), intents=intents)
 
     async def setup_hook(self):
-        # This is the primary place to load extensions (cogs) and sync commands.
         try:
             await self.add_cog(PlayCommand(self))
             print("⚙️ PlayCommand Cog Loaded Successfully")
@@ -40,19 +34,6 @@ class BasslineBot(commands.Bot):
             print(f"❌ Failed to load PlaylistCommand Cog: {e}")
             traceback.print_exc()
         
-        # Sync the command tree.
-        # For global commands, this might take a bit to propagate (up to an hour sometimes).
-        # For faster testing, you can sync to a specific guild:
-        # GUILD_ID = 123456789012345678 # Replace with your test guild ID
-        # test_guild = discord.Object(id=GUILD_ID)
-        # self.tree.copy_global_to(guild=test_guild)
-        # try:
-        #     await self.tree.sync(guild=test_guild)
-        #     print(f"🛠️ Synced commands to guild {GUILD_ID}")
-        # except Exception as e:
-        #     print(f"❌ Failed to sync commands to guild {GUILD_ID}: {e}")
-        
-        # Sync global commands
         try:
             await self.tree.sync()
             print("🌐 Synced global slash commands.")
@@ -60,15 +41,12 @@ class BasslineBot(commands.Bot):
             print(f"❌ Failed to sync global slash commands: {e}")
             traceback.print_exc()
 
-
 bot = BasslineBot()
 
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
     print(f"🤖 {bot.user.name} is online and ready in {len(bot.guilds)} server(s)!")
-    # Command syncing is now handled in setup_hook.
-    # Setting bot activity:
     try:
         activity = discord.Activity(type=discord.ActivityType.listening, name="/play | !bl help")
         await bot.change_presence(activity=activity)
@@ -76,8 +54,46 @@ async def on_ready():
     except Exception as e:
         print(f"⚠️ Failed to set bot activity: {e}")
 
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """
+    Handles voice state updates, especially for the bot itself.
+    If the bot is disconnected from a voice channel, it clears its music state for that guild.
+    """
+    if member.id == bot.user.id: # Check if the update is for the bot itself
+        guild_id = member.guild.id
+        if before.channel is not None and after.channel is None:
+            # Bot was in a channel (before.channel) and now is not in any channel (after.channel is None)
+            # This means the bot was disconnected (manually, kicked, or left via command/idle timeout)
+            log_prefix = f"[VOICE_STATE_UPDATE Guild: {guild_id}] "
+            log(log_prefix + "BOT_DISCONNECTED", f"Bot disconnected from voice channel '{before.channel.name}'. Clearing music state.", LogColors.YELLOW)
+            
+            # Stop any active player for this guild if it somehow still exists
+            vc = music_manager.voice_clients.get(guild_id)
+            if vc and (vc.is_playing() or vc.is_paused()):
+                vc.stop()
+                log(log_prefix + "BOT_DISCONNECTED", "Stopped active player.", LogColors.YELLOW)
+            
+            music_manager.clear_guild_state(guild_id) # Clear queue, now_playing, etc.
+            
+            # Optionally send a message to a relevant text channel
+            # This part needs a good way to find the "last active" or a default channel.
+            # For now, just logging. If you have a system for tracking last interaction channel, use it.
+            # Example:
+            # last_interaction_channel_id = music_manager.get_last_interaction_channel(guild_id)
+            # if last_interaction_channel_id:
+            #     text_channel = bot.get_channel(last_interaction_channel_id)
+            #     if text_channel:
+            #         try:
+            #             await text_channel.send("I've been disconnected from the voice channel. Playback stopped and queue cleared.")
+            #         except discord.Forbidden:
+            #             log(log_prefix + "BOT_DISCONNECTED_MSG_FAIL", "No permission to send disconnect message.", LogColors.YELLOW)
+            #         except Exception as e:
+            #             log(log_prefix + "BOT_DISCONNECTED_MSG_ERROR", f"Error sending disconnect message: {e}", LogColors.YELLOW)
+
+
 async def main():
-    async with bot: # This handles bot.close() automatically
+    async with bot: 
         if DISCORD_TOKEN is None:
             print("❌ DISCORD_TOKEN is not set. Please check your .env file or environment variables.")
             return
@@ -90,13 +106,10 @@ async def main():
             traceback.print_exc()
 
 if __name__ == "__main__":
-    # Setup for asyncio loop on Windows if needed for some libraries, though usually not for discord.py itself
-    # if sys.platform == "win32":
-    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("🤖 Bot shutting down by KeyboardInterrupt...")
-    except Exception as e: # Catch-all for errors during asyncio.run if main() itself raises before bot starts
+    except Exception as e: 
         print(f"💥 A critical error occurred: {e}")
         traceback.print_exc()
