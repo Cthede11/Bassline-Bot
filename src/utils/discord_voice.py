@@ -5,6 +5,7 @@ import asyncio
 import functools
 import os
 import traceback # For detailed error logging
+from src.utils.music import music_manager
 
 # ANSI color codes
 class LogColors:
@@ -19,42 +20,85 @@ def log(tag, message, color=LogColors.RESET):
     print(f"{color}[{tag}]{LogColors.RESET} {message}")
 
 async def join_voice_channel(interaction: discord.Interaction):
-    user_channel = interaction.user.voice.channel if interaction.user.voice else None
+    guild = interaction.guild
+    user = interaction.user
+    guild_id = guild.id
+
+    log("DEBUG_JOIN_TRACE", f"User requested join: {user} in {guild.name} ({guild_id})", LogColors.BLUE)
+
+    user_channel = user.voice.channel if user.voice else None
     if not user_channel:
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ You must be in a voice channel to use this command.", ephemeral=True)
-        else:
-            await interaction.followup.send("❌ You must be in a voice channel to use this command.", ephemeral=True)
-        return None
-    bot_voice = interaction.guild.voice_client
-    try:
-        if not bot_voice:
-            # log("VOICE_JOIN", f"Attempting to join channel: {user_channel.name}", LogColors.CYAN)
-            new_voice_client = await asyncio.wait_for(user_channel.connect(), timeout=10.0)
-            # log("VOICE_JOIN_SUCCESS", f"Successfully joined channel: {new_voice_client.channel.name}", LogColors.GREEN)
-            return new_voice_client
-        if bot_voice.channel != user_channel:
-            # log("VOICE_MOVE", f"Attempting to move from {bot_voice.channel.name} to {user_channel.name}", LogColors.CYAN)
-            await asyncio.wait_for(bot_voice.move_to(user_channel), timeout=10.0)
-            # log("VOICE_MOVE_SUCCESS", f"Successfully moved to channel: {user_channel.name}", LogColors.GREEN)
-        return interaction.guild.voice_client
-    except asyncio.TimeoutError:
-        log("ERROR_JOIN_VC", f"Timeout connecting/moving to VC: {user_channel.name}", LogColors.RED)
-        if interaction.response.is_done(): await interaction.followup.send(f"❌ Timed out connecting to {user_channel.name}.", ephemeral=True)
-        else: await interaction.response.send_message(f"❌ Timed out connecting to {user_channel.name}.", ephemeral=True)
-        return None
-    except discord.errors.ClientException as e:
-        log("ERROR_JOIN_VC", f"ClientException connecting/moving: {e}", LogColors.RED)
-        if interaction.response.is_done(): await interaction.followup.send(f"❌ Error connecting to voice: {e}", ephemeral=True)
-        else: await interaction.response.send_message(f"❌ Error connecting to voice: {e}", ephemeral=True)
-        return None
-    except Exception as e:
-        log("ERROR_JOIN_VC", f"Unexpected error in join_voice_channel: {e}", LogColors.RED); traceback.print_exc()
-        if interaction.response.is_done(): await interaction.followup.send("❌ Unexpected error joining voice.", ephemeral=True)
-        else: await interaction.response.send_message("❌ Unexpected error joining voice.", ephemeral=True)
+        await interaction.response.send_message("❌ You must be in a voice channel to use this command.", ephemeral=True)
         return None
 
+    try:
+        # Send initial response so followup.send works later
+        await interaction.response.defer(ephemeral=True, thinking=False)
+    except discord.InteractionResponded:
+        pass  # Already responded elsewhere
+
+    # Refresh voice client reference
+    bot_voice = guild.voice_client
+    log("VOICE_DEBUG", f"[INIT] user_channel={user_channel}, bot_voice={bot_voice}, connected={bot_voice.is_connected() if bot_voice else 'None'}", LogColors.BLUE)
+
+    try:
+        if not bot_voice or not bot_voice.is_connected():
+            log("VOICE_JOIN", f"Attempting to join channel: {user_channel.name}", LogColors.CYAN)
+
+            vc = await asyncio.wait_for(user_channel.connect(), timeout=15.0)
+            await asyncio.sleep(1.5)  # Let Discord finalize connection
+
+            if not vc or not vc.is_connected():
+                raise Exception("Voice client failed to connect properly.")
+
+            music_manager.voice_clients[guild_id] = vc
+            log("VOICE_JOIN_SUCCESS", f"✅ Connected to {vc.channel.name} successfully.", LogColors.GREEN)
+            log("VOICE_DEBUG", f"[POST-CONNECT] vc connected={vc.is_connected()}, channel={vc.channel}", LogColors.BLUE)
+            return vc
+
+        elif bot_voice.channel != user_channel:
+            log("VOICE_MOVE", f"Moving from {bot_voice.channel.name} to {user_channel.name}", LogColors.CYAN)
+
+            await asyncio.wait_for(bot_voice.move_to(user_channel), timeout=15.0)
+            await asyncio.sleep(1.0)
+
+            music_manager.voice_clients[guild_id] = bot_voice
+            log("VOICE_MOVE_SUCCESS", f"✅ Moved to {user_channel.name}", LogColors.GREEN)
+            return bot_voice
+
+        else:
+            # Already in correct VC
+            log("VOICE_JOIN_SKIP", f"Already connected to {user_channel.name}.", LogColors.YELLOW)
+            return bot_voice
+
+    except asyncio.TimeoutError:
+        log("ERROR_JOIN_VC", f"⏳ Timeout connecting/moving to VC: {user_channel.name}", LogColors.RED)
+        try:
+            await interaction.followup.send(f"❌ Timed out trying to connect to `{user_channel.name}`.", ephemeral=True)
+        except:
+            pass
+        return None
+
+    except discord.ClientException as e:
+        log("ERROR_JOIN_VC", f"ClientException during voice join: {e}", LogColors.RED)
+        try:
+            await interaction.followup.send(f"❌ Error joining voice: {e}", ephemeral=True)
+        except:
+            pass
+        return None
+
+    except Exception as e:
+        log("ERROR_JOIN_VC", f"Unhandled Exception: {e}", LogColors.RED)
+        try:
+            await interaction.followup.send("❌ An unexpected error occurred while joining VC.", ephemeral=True)
+        except:
+            pass
+        return None
+
+
+
 async def play_song(voice_client, search_query, return_source=False, bass_boost=False, download_first=True):
+
     start_time_op = time.time()
     log_prefix = f"[PLAY_SONG Query: '{search_query[:50]}...'] "
 
@@ -167,9 +211,16 @@ async def play_song(voice_client, search_query, return_source=False, bass_boost=
         
         ffmpeg_options_dict['options'] += f" -af \"{complex_filter_string}\""
         log(log_prefix + "FFMPEG_EFFECT", f"Applied 3-band EQ bass boost: {complex_filter_string}", LogColors.CYAN)
-    
+    log("PLAY_DEBUG", f"Track: '{title}' | Duration: {duration}s | Download first: {download_first}", LogColors.YELLOW)
+    log("PLAY_DEBUG", f"Selected Stream URL: {stream_url_final}", LogColors.YELLOW)
+    log("PLAY_DEBUG", f"Formats available: {len(selected_entry.get('formats', []))}", LogColors.BLUE)
+
     try:
         source = discord.FFmpegPCMAudio(stream_url_final, **ffmpeg_options_dict) 
+        log("PLAY_DEBUG", f"Track: '{title}' | Duration: {duration}s | Download first: {download_first}", LogColors.YELLOW)
+        log("PLAY_DEBUG", f"Selected Stream URL: {stream_url_final}", LogColors.YELLOW)
+        log("PLAY_DEBUG", f"Formats available: {len(selected_entry.get('formats', []))}", LogColors.BLUE)
+
     except Exception as e:
         log(log_prefix + "FFMPEG_ERROR", f"Error creating FFmpegPCMAudio. Path/URL: '{stream_url_final}'. Error: {e}", LogColors.RED)
         traceback.print_exc() 

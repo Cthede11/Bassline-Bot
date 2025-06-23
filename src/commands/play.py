@@ -1,10 +1,11 @@
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands, Interaction, Embed, Role 
+from discord import app_commands, Interaction, Embed, Role, SelectOption
 from discord.ui import Button, View, Select
 import asyncio
 import time
 import traceback 
+
 
 from src.utils.discord_voice import join_voice_channel, play_song, search_youtube, LogColors, log
 from src.utils.music import music_manager, LoopState 
@@ -290,6 +291,7 @@ class PlayCommand(commands.Cog):
             actual_audio_source = song_details["source"]
             music_manager.set_now_playing(guild_id, {"title": song_details["title"], "duration": song_details["duration"], "thumbnail": song_details.get("thumbnail"), "query": query, "start_time": time.time(), "url": song_details.get("webpage_url"), "uploader": song_details.get("uploader")}, interaction.user)
             def after_initial_playback_hook(error_from_player):
+                log("AFTER_HOOK", f"Song completed. Title: {current_song_info.get('title', 'Unknown')}, Duration expected: {expected_duration}, Played: {actual_play_time:.2f}s", LogColors.CYAN)
                 hook_log_prefix = f"[PlayCmd Guild: {guild_id}] AFTER_INITIAL_PLAY_HOOK "; effective_error = error_from_player
                 current_song_info = music_manager.get_now_playing(guild_id)
                 if error_from_player is None and current_song_info:
@@ -297,8 +299,11 @@ class PlayCommand(commands.Cog):
                     if playback_start_time > 0:
                         actual_play_time = time.time() - playback_start_time
                         if expected_duration > 3 and actual_play_time < 1.5:
+                            log("AFTER_HOOK_ERROR", "Playback finished too quickly, retrying...", LogColors.RED)
                             silent_fail_msg = f"Initial song finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s)."
                             log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW); effective_error = Exception(silent_fail_msg)
+                        else:
+                            log("AFTER_HOOK", "Playback finished normally.", LogColors.GREEN)
                 log(hook_log_prefix + "TRIGGERED", f"For initial song '{query}'. Player Error: '{error_from_player}', Effective Error: '{effective_error}'", LogColors.CYAN)
                 asyncio.run_coroutine_threadsafe(self._play_next(interaction, error=effective_error, retry_count=0), self.bot.loop)
             await asyncio.sleep(0.1); vc = interaction.guild.voice_client 
