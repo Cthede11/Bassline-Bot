@@ -4,15 +4,31 @@ BasslineBot is a powerful, self-hosted Discord music bot that plays music from  
 
 ---
 
+
 ## ⚙️ Features
 
-- 🎵 `!play [YouTube query | song name | custom Discord playlist]` — plays instantly
-- 📻 YouTube search-based streaming (via `yt_dlp`)
-- 📂 Playlist system using Discord channels
-- 🎚️ Queue management with `!queue`, `!skip`, `!shuffle`, `!clear`
-- ⏯️ Playback control with `!pause` and `!resume`
-- ⚡ Preloads next track for seamless transitions
-- 🗃️ Custom playlists managed in Discord text channels
+- 🎵 `/play [YouTube query or URL]` — Plays a song or adds it to the queue instantly.
+- 📻 Youtube-based streaming powered by `yt-dlp`.
+- ⚡ Preloads the next track for seamless transitions.
+- 🎚️ **Playback Control:**
+    - `/stop` — Stops the current song and clears the queue, disconnecting the bot.
+    - `/skip` — Skips the current song or a specified number of songs in the queue.
+    - `/pause` — Pauses the current song.
+    - `/resume` — Resumes a paused song.
+    - `/loop [off/single/queue]` — Sets the loop mode for the current song or the entire queue.
+- 🎶 **Queue Management:**
+    - `/queue` — Displays the current song queue.
+    - `/shuffle` — Shuffles the songs in the queue.
+    - `/clear` — Clears all songs from the queue.
+- 🔊 **Audio Enhancements:**
+    - `/bassboost` — Toggles bass boost on or off for your user session.
+- 🗃️ **Custom Playlist System:**
+    - Create and manage custom playlists directly within Discord text channels.
+    - `/createplaylist [playlist name]` — Creates a new dedicated text channel for your playlist.
+    - `/playplaylist [playlist name]` — Plays a custom playlist.
+- 🔐 **DJ Role Control:** Commands like `/stop` and `/skip` can be restricted to users with a designated "DJ" role or server administrators.
+- 💤 **Auto Disconnect:** The bot automatically disconnects from the voice channel after a period of inactivity.
+- 🔊 **Now Playing Embed:** Rich embeds provide detailed information about the currently playing song.
 
 ---
 
@@ -30,12 +46,10 @@ Make sure [FFmpeg](https://ffmpeg.org/download.html) is installed and added to y
 
 ### 2. Create a `.env` file
 
-Add the following environment variables:
+Add the following environment variable:
 
 ```
 DISCORD_TOKEN=your_discord_bot_token
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
 
 ### 3. Run the Bot
@@ -45,23 +59,27 @@ From the root of the project:
 ```bash
 python -m src.bot
 ```
+Or use the start-bot.bat file updated with your actual file path
 
 ---
 
 ## 💡 Available Commands
 
-| Command                           | Description                                                          |
-|-----------------------------------|----------------------------------------------------------------------|
-| `!play [song]`                    | Plays a song or Spotify playlist                                     |
-| `!queue`                          | Shows the current queue                                              |
-| `!skip`                           | Skips the currently playing track                                    |
-| `!pause`                          | Pauses playback                                                      |
-| `!resume`                         | Resumes playback                                                     |
-| `!shuffle`                        | Shuffles the remaining queue                                         |
-| `!clear`                          | Clears the queue and stops playback                                  |
-| `!setupplaylists`                 | Creates the playlist category to organize custom playlist channels   |
-| `!createplaylists` [name]         | Creates a new text channel playlist with the given name              |
-| `!playplaylists` [name/#channel]  | Plays songs from the named or mentioned custom playlist channel      |
+| Command           | Description                                                                                             | Parameters                                               |
+| :---------------- | :------------------------------------------------------------------------------------------------------ | :------------------------------------------------------- |
+| `/play`           | Plays a song or adds it to the queue instantly. Supports Youtube queries or direct URLs.                | `query_or_url`: Youtube query or URL.                    |
+| `/stop`           | Stops the current song, clears the entire queue, and disconnects the bot from the voice channel.        | None                                                     |
+| `/skip`           | Skips the current song or a specified number of songs in the queue.                                     | `count`: Defaults to 1.                                  |
+| `/pause`          | Pauses the currently playing song.                                                                      | None                                                     |
+| `/resume`         | Resumes a paused song.                                                                                  | None                                                     |
+| `/loop`           | Sets the loop mode for playback.                                                                        | `mode`: `off`, `single` , or `queue`.                    |
+| `/queue`          | Displays the current list of songs in the playback queue.                                               | None                                                     |
+| `/shuffle`        | Shuffles the order of songs in the current queue.                                                       | None                                                     |
+| `/clear`          | Clears all songs from the playback queue.                                                               | None                                                     |
+| `/bassboost`      | Toggles the bass boost audio effect on or off for your user session.                                    | None                                                     |
+| `/setupplaylists` | Creates a text channel category for storing custom playlists (Admin only)                               | None                                                     |
+| `/createplaylist` | Creates a new dedicated text channel in your server for a custom playlist.                              | `name`: The name for your new playlist.                  |
+| `/playplaylist`   | Starts playing a custom playlist from its beginning.                                                    | `playlist_name`: The name of the playlist to play.       |
 
 ---
 
@@ -96,15 +114,9 @@ View Channel – Access channels required for reading playlist data
 
 ## 🛠️ Coming Soon
 
-- Fix to slight playback cut when preloading next song
 - Volume Control
-- Bass Boost
-- Now Playing embed
 - Lyrics fetch command (Toggle on/off?)
-- Auto Disconnect
-- DJ role only control
 - Queue saved locally for continuity through restart
-- Updated command system (Update to slash commands with auto-complete)
 
 ---
 
