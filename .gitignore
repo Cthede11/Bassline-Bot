@@ -160,3 +160,4 @@ cython_debug/
 #.idea/
 src/utils/cookies.txt
 src/utils/bassboost_settings.json
+src/utils/dj_settings.json

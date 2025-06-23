@@ -11,38 +11,42 @@ from src.utils.discord_voice import join_voice_channel, play_song, search_youtub
 from src.utils.music import music_manager, LoopState 
 
 # --- Custom Check for DJ Role or Admin ---
+# In src/commands/play.py
+
 def is_dj_or_admin():
-    """Custom check to see if the user is an admin or has the DJ role."""
     async def predicate(interaction: Interaction) -> bool:
         if not interaction.guild: 
-            # This should ideally not happen for guild commands but good to check
-            log("DJ_CHECK_ERROR", "is_dj_or_admin check used outside of a guild context.", LogColors.RED)
+            log("DJ_CHECK_ERROR", "is_dj_or_admin check used outside of a guild context.", LogColors.RED, always_print=True)
             return False 
         
-        # Check if user is an administrator
+        # FIX 1: Use interaction.user directly for permissions check
         if interaction.user.guild_permissions.administrator:
+            log("DJ_CHECK_INFO", f"User {interaction.user.name} is admin, allowing command.", LogColors.BLUE)
             return True 
 
         guild_id = interaction.guild.id
         dj_role_id = music_manager.get_dj_role_id(guild_id)
 
         if dj_role_id:
-            # Check if user has the DJ role
-            # Ensure interaction.user is a Member object to access roles
-            if isinstance(interaction.user, discord.Member):
+            # FIX 2: Check interaction.user directly for isinstance and roles
+            if isinstance(interaction.user, discord.Member): # This check is actually redundant as interaction.user will always be a Member in a guild command context
                 dj_role = interaction.guild.get_role(dj_role_id)
-                if dj_role and dj_role in interaction.user.roles:
-                    return True 
-            else: # Should not happen with slash commands from guilds
-                log("DJ_CHECK_ERROR", f"User object type is not Member: {type(interaction.user)}", LogColors.YELLOW)
-
-
-        # If no DJ role is set, or user doesn't have it, this check fails.
-        # The message is now part of the CheckFailure exception.
-        raise app_commands.CheckFailure(
-            "You need to be an Administrator or have the designated DJ role to use this command. "
-            "An admin can set the DJ role using `/setdjrole`."
-        )
+                if dj_role and dj_role in interaction.user.roles: # Check roles on interaction.user
+                    log("DJ_CHECK_INFO", f"User {interaction.user.name} has DJ role {dj_role.name}, allowing command.", LogColors.BLUE)
+                    return True
+                else:
+                    log("DJ_CHECK_FAILED", f"User {interaction.user.name} does not have DJ role {dj_role.name} ({dj_role_id}).", LogColors.YELLOW)
+                    await interaction.response.send_message(f"🚫 You need the DJ role (`{dj_role.name}`) or be an administrator to use this command.", ephemeral=True)
+                    return False
+            else:
+                # This 'else' should now theoretically never be hit for guild commands
+                log("DJ_CHECK_WARNING", f"interaction.user is not a Member object for guild {guild_id}. Cannot check roles. This should not happen.", LogColors.YELLOW, always_print=True)
+                await interaction.response.send_message("🚫 Could not verify your roles for this command.", ephemeral=True)
+                return False
+        else:
+            # If no DJ role is set, everyone can use it
+            log("DJ_CHECK_INFO", f"No DJ role set for guild {guild_id}. Allowing command.", LogColors.BLUE)
+            return True
     return app_commands.check(predicate)
 
 class PlayCommand(commands.Cog):
@@ -84,7 +88,7 @@ class PlayCommand(commands.Cog):
                         if tc.permissions_for(guild.me).send_messages: 
                             target_channel = tc; break
         if not target_channel: 
-            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Could not determine target channel for guild {guild_id}.", LogColors.RED)
+            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Could not determine target channel for guild {guild_id}.", LogColors.RED, always_print=True)
             return
             
         if not now_playing_info:
@@ -121,9 +125,9 @@ class PlayCommand(commands.Cog):
         except discord.errors.NotFound: 
             if target_channel: 
                 try: await target_channel.send(embed=embed)
-                except Exception as e_raw_send: log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Raw channel send also failed - {e_raw_send}", LogColors.RED)
+                except Exception as e_raw_send: log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Raw channel send also failed - {e_raw_send}", LogColors.RED, always_print=True)
         except Exception as e: 
-            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Error sending - {e}", LogColors.RED)
+            log("EMBED_SEND_ERROR", f"PlayCmd NowPlaying: Error sending - {e}", LogColors.RED, always_print=True)
             traceback.print_exc()
 
     async def _play_next(self, interaction_context: Interaction, error=None, retry_count=0): 
@@ -235,7 +239,7 @@ class PlayCommand(commands.Cog):
             await interaction.response.send_message("❌ You must be an Administrator to use this command.", ephemeral=True)
         else:
             await interaction.response.send_message(f"❌ An error occurred: {error}", ephemeral=True)
-            log("SET_DJ_ROLE_ERROR", f"Error in /setdjrole: {error}", LogColors.RED)
+            log("SET_DJ_ROLE_ERROR", f"Error in /setdjrole: {error}", LogColors.RED, always_print=True)
 
     @app_commands.command(name="cleardjrole", description="Clears the DJ role for this server (Admin only).")
     @app_commands.checks.has_permissions(administrator=True)
@@ -250,7 +254,7 @@ class PlayCommand(commands.Cog):
             await interaction.response.send_message("❌ You must be an Administrator to use this command.", ephemeral=True)
         else:
             await interaction.response.send_message(f"❌ An error occurred: {error}", ephemeral=True)
-            log("CLEAR_DJ_ROLE_ERROR", f"Error in /cleardjrole: {error}", LogColors.RED)
+            log("CLEAR_DJ_ROLE_ERROR", f"Error in /cleardjrole: {error}", LogColors.RED, always_print=True)
             
     @app_commands.command(name="checkdjrole", description="Checks the currently configured DJ role for this server.")
     async def check_dj_role(self, interaction: Interaction):
@@ -299,7 +303,7 @@ class PlayCommand(commands.Cog):
                     if playback_start_time > 0:
                         actual_play_time = time.time() - playback_start_time
                         if expected_duration > 3 and actual_play_time < 1.5:
-                            log("AFTER_HOOK_ERROR", "Playback finished too quickly, retrying...", LogColors.RED)
+                            log("AFTER_HOOK_ERROR", "Playback finished too quickly, retrying...", LogColors.RED, always_print=True)
                             silent_fail_msg = f"Initial song finished too quickly (expected {expected_duration:.0f}s, played {actual_play_time:.2f}s)."
                             log(hook_log_prefix + "SILENT_FAILURE_DETECTED", silent_fail_msg, LogColors.YELLOW); effective_error = Exception(silent_fail_msg)
                         else:
@@ -384,7 +388,7 @@ class PlayCommand(commands.Cog):
                         music_manager.set_now_playing(guild_id, {"title": song_details["title"], "duration": song_details["duration"], "thumbnail": song_details.get("thumbnail"), "query": selected_track_query, "start_time": time.time(), "url": song_details.get("webpage_url"), "uploader": song_details.get("uploader")}, select_interaction.user)
                         await asyncio.sleep(0.1); vc = select_interaction.guild.voice_client
                         if not vc or not vc.is_connected():
-                            log("SEARCH_SELECT_PLAY_ERROR", "VC disconnected before play in search select.", LogColors.RED)
+                            log("SEARCH_SELECT_PLAY_ERROR", "VC disconnected before play in search select.", LogColors.RED, always_print=True)
                             await select_interaction.followup.send("⚠️ I was disconnected. Please try playing again.", ephemeral=True)
                             await self.stop_and_disable_view(self.original_interaction); return
                         def after_search_select_playback_hook(error_from_player):
@@ -401,7 +405,7 @@ class PlayCommand(commands.Cog):
                         vc.play(source, after=after_search_select_playback_hook)
                         await self.cog_instance.send_now_playing_embed(select_interaction.channel, guild_id, from_play_next=True)
                     except Exception as e:
-                        log("SEARCH_SELECT_PLAY_ERROR", f"Error playing '{selected_track_title}': {e}", LogColors.RED); traceback.print_exc()
+                        log("SEARCH_SELECT_PLAY_ERROR", f"Error playing '{selected_track_title}': {e}", LogColors.RED); traceback.print_exc(always_print=True)
                         await select_interaction.followup.send(f"❌ Error playing **{selected_track_title}**: {str(e)[:1000]}", ephemeral=True)
                 await self.stop_and_disable_view(self.original_interaction) 
                 music_manager.search_results.pop(guild_id, None)
@@ -421,10 +425,32 @@ class PlayCommand(commands.Cog):
     @app_commands.command(name="skip", description="Skips the currently playing song.")
     @is_dj_or_admin()
     async def skip(self, interaction: Interaction):
-        guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
-        vc = music_manager.voice_clients.get(guild_id)
-        if not vc or not (vc.is_playing() or vc.is_paused()): await interaction.response.send_message("Nothing is playing to skip.", ephemeral=True); return
-        await interaction.response.send_message("⏭️ Skipping song..."); vc.stop()
+        try:
+            guild = interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+                return
+
+            guild_id = guild.id
+            music_manager.update_last_activity(guild_id)
+
+            vc = music_manager.voice_clients.get(guild_id)
+            if not vc or not (vc.is_playing() or vc.is_paused()):
+                await interaction.response.send_message("❌ Nothing is playing to skip.", ephemeral=True)
+                return
+
+            await interaction.response.send_message("⏭️ Skipping song...")
+            vc.stop()
+
+        except Exception as e:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⚠️ Error: {e}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"⚠️ Error during skip: {e}", ephemeral=True)
+            except:
+                pass  # Ensure no crash if both fail
+
 
     @app_commands.command(name="queue", description="Shows the current song queue.")
     async def queue(self, interaction: Interaction):
@@ -435,7 +461,7 @@ class PlayCommand(commands.Cog):
         else: embed.add_field(name="Now Playing", value="Nothing is playing.", inline=False)
         if not current_queue: embed.description = "The queue is currently empty."
         else:
-            queue_text_lines = [f"{i+1}. `{track_query[:70].strip()}` (Requested by: {user.mention})" for i, (track_query, user) in enumerate(current_queue[:15])]
+            queue_text_lines = [f"{i+1}. `{track_query[:70].strip()}` (Requested by: {user})" for i, (track_query, user) in enumerate(current_queue[:15])]
             embed.add_field(name=f"Up Next - {len(current_queue)} song(s)", value="\n".join(queue_text_lines) if queue_text_lines else "Empty", inline=False)
             if len(current_queue) > 15: embed.set_footer(text=f"... and {len(current_queue) - 15} more.")
         await interaction.response.send_message(embed=embed)
@@ -443,19 +469,60 @@ class PlayCommand(commands.Cog):
     @app_commands.command(name="pause", description="Pauses the current song.")
     @is_dj_or_admin()
     async def pause(self, interaction: Interaction):
-        guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
-        vc = music_manager.voice_clients.get(guild_id)
-        if vc and vc.is_playing() and not vc.is_paused(): music_manager.pause(guild_id); await interaction.response.send_message("⏸️ Paused.")
-        elif vc and vc.is_paused(): await interaction.response.send_message("Already paused.", ephemeral=True)
-        else: await interaction.response.send_message("Nothing is playing to pause.", ephemeral=True)
+        try:
+            guild = interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+                return
+
+            guild_id = guild.id
+            music_manager.update_last_activity(guild_id)
+
+            vc = music_manager.voice_clients.get(guild_id)
+            if not vc or not vc.is_playing():
+                await interaction.response.send_message("❌ Nothing is currently playing.", ephemeral=True)
+                return
+
+            vc.pause()
+            await interaction.response.send_message("⏸️ Paused playback.")
+
+        except Exception as e:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⚠️ Error: {e}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"⚠️ Error during pause: {e}", ephemeral=True)
+            except:
+                pass
 
     @app_commands.command(name="resume", description="Resumes the current song.")
     @is_dj_or_admin()
     async def resume(self, interaction: Interaction):
-        guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id)
-        vc = music_manager.voice_clients.get(guild_id)
-        if vc and vc.is_paused(): music_manager.resume(guild_id); await interaction.response.send_message("▶️ Resumed.")
-        else: await interaction.response.send_message("No paused song to resume.", ephemeral=True)
+        try:
+            guild = interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+                return
+
+            guild_id = guild.id
+            music_manager.update_last_activity(guild_id)
+
+            vc = music_manager.voice_clients.get(guild_id)
+            if not vc or not vc.is_paused():
+                await interaction.response.send_message("❌ No paused song to resume.", ephemeral=True)
+                return
+
+            vc.resume()
+            await interaction.response.send_message("▶️ Resumed playback.")
+
+        except Exception as e:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⚠️ Error: {e}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"⚠️ Error during resume: {e}", ephemeral=True)
+            except:
+                pass
 
     @app_commands.command(name="shuffle", description="Shuffles the current queue.")
     @is_dj_or_admin()
@@ -473,15 +540,30 @@ class PlayCommand(commands.Cog):
     @app_commands.command(name="stop", description="Stops music, clears queue, and disconnects.")
     @is_dj_or_admin()
     async def stop(self, interaction: Interaction):
-        guild_id = interaction.guild.id; music_manager.update_last_activity(guild_id) 
-        vc = music_manager.voice_clients.get(guild_id)
-        if vc and vc.is_connected():
-            if vc.is_playing() or vc.is_paused(): vc.stop() 
-            await vc.disconnect()
-            log("STOP_CMD", f"Stopped by user and called disconnect for '{interaction.guild.name}'.", LogColors.YELLOW)
-        else: 
-            music_manager.clear_guild_state(guild_id) 
-        await interaction.response.send_message("⏹️ Music stopped, queue cleared, and disconnected.")
+        try:
+            guild = interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+                return
+
+            guild_id = guild.id
+            music_manager.update_last_activity(guild_id)
+
+            music_manager.clear_queue(guild_id)
+            vc = music_manager.voice_clients.get(guild_id)
+            if vc:
+                vc.stop()
+
+            await interaction.response.send_message("🛑 Stopped playback and cleared the queue.")
+
+        except Exception as e:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⚠️ Error: {e}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"⚠️ Error during stop: {e}", ephemeral=True)
+            except:
+                pass
 
     @app_commands.command(name="bassboost", description="Toggle bass boost for yourself.")
     async def bassboost(self, interaction: Interaction):
@@ -489,9 +571,11 @@ class PlayCommand(commands.Cog):
         try:
             state = music_manager.toggle_bass_boost(interaction.user.id)
             emoji = "🔊" if state else "🔈"
-            await interaction.response.send_message(f"{emoji} Bass Boost {'enabled' if state else 'disabled'} for {interaction.user.mention}")
+            await interaction.response.send_message(f"{emoji} Bass Boost {'enabled' if state else 'disabled'} for {interaction.user}")
         except Exception as e:
-            log("BASSBOOST_ERROR", f"Bass boost toggle failed: {e}", LogColors.RED)
+            log("BASSBOOST_ERROR", f"Bass boost toggle failed: {e}", LogColors.RED, always_print=True)
+            traceback_str = traceback.format_exc()
+            log("[TRACEBACK]", traceback_str, LogColors.RED)
             await interaction.response.send_message("❌ Failed to toggle bass boost.", ephemeral=True)
 
     @app_commands.command(name="clean", description="Deletes the bot's messages in the current channel.")
@@ -506,7 +590,7 @@ class PlayCommand(commands.Cog):
             await interaction.followup.send(f"🧹 Deleted {deleted_count} bot message(s).", ephemeral=True)
         except discord.Forbidden: await interaction.followup.send("I don't have permission to delete messages in this channel.", ephemeral=True)
         except Exception as e:
-            log("CLEAN_CMD_ERROR", f"An error occurred while cleaning messages: {e}", LogColors.RED); traceback.print_exc()
+            log("CLEAN_CMD_ERROR", f"An error occurred while cleaning messages: {e}", LogColors.RED); traceback.print_exc(always_print=True)
             await interaction.followup.send(f"An error occurred while cleaning messages: {str(e)[:1000]}", ephemeral=True)
 
     async def cog_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
@@ -519,7 +603,7 @@ class PlayCommand(commands.Cog):
             perms_needed = ", ".join(error.missing_permissions)
             await interaction.response.send_message(f"❌ You are missing the following permission(s) to use this command: `{perms_needed}`", ephemeral=True)
         else:
-            log("APP_COMMAND_ERROR", f"Unhandled error in PlayCommand: {error} for command {interaction.command.name if interaction.command else 'N/A'}", LogColors.RED)
+            log("APP_COMMAND_ERROR", f"Unhandled error in PlayCommand: {error} for command {interaction.command.name if interaction.command else 'N/A'}", LogColors.RED, always_print=True)
             traceback.print_exc()
             if not interaction.response.is_done():
                 await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
@@ -552,7 +636,7 @@ class PlayCommand(commands.Cog):
                             if tc_obj.permissions_for(guild.me).send_messages: text_channel_to_notify = tc_obj; break
                     if text_channel_to_notify:
                         try: await text_channel_to_notify.send(f"👋 Disconnecting from {vc.channel.mention}. Reason: {reason_to_leave}")
-                        except Exception as e_msg: log("IDLE_MSG_ERROR", f"Failed to send idle leave message to {text_channel_to_notify.name}: {e_msg}", LogColors.YELLOW)
+                        except Exception as e_msg: log("IDLE_MSG_ERROR", f"Failed to send idle leave message to {text_channel_to_notify.name}: {e_msg}", LogColors.YELLOW, always_print=True)
                     await vc.disconnect(); 
             elif guild_id in music_manager.voice_clients: 
                 music_manager.clear_guild_state(guild_id)
