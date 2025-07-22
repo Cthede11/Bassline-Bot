@@ -1,4 +1,3 @@
-### src/commands/admin_commands.py
 import logging
 import time
 import discord
@@ -334,4 +333,10 @@ class AdminCommands(commands.Cog):
             logger.info(f"Cleaned up {deleted} messages in guild {interaction.guild.id}")
             
         except discord.Forbidden:
-            await interaction.response.send_message("❌ You do not have permission to manage messages.", ephemeral=True)
+            await interaction.followup.send("❌ I don't have permission to manage messages.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in cleanup command: {e}")
+            await interaction.followup.send("❌ An error occurred during cleanup.", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(AdminCommands(bot))

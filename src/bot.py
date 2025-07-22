@@ -28,11 +28,11 @@ class BasslineBotPro(commands.Bot):
     """Enhanced Discord music bot with professional features."""
     
     def __init__(self):
-        # Bot intents
+        # Bot intents - Updated for Discord API compatibility
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
-        intents.voice_states = True
+        intents.voice_states = True  # This is the correct intent for voice
         intents.guild_messages = True
         
         super().__init__(
@@ -110,12 +110,14 @@ class BasslineBotPro(commands.Bot):
     async def on_ready(self):
         """Called when bot is ready."""
         if not self.startup_time:
-            import time
             self.startup_time = time.time()
             
             logger.info(f"[SUCCESS] {self.user.name} is online!")
             logger.info(f"[STATS] Connected to {len(self.guilds)} guilds")
             logger.info(f"[USERS] Serving {sum(g.member_count for g in self.guilds)} users")
+            
+            # Log Discord.py version for debugging
+            logger.info(f"[VERSION] Discord.py version: {discord.__version__}")
             
             # Start web dashboard if enabled
             if settings.dashboard_enabled:
@@ -142,8 +144,8 @@ class BasslineBotPro(commands.Bot):
                 inline=False
             )
             embed.add_field(
-                name="Need Help?",
-                value="Check out our documentation or join our support server.",
+                name="Voice Connection Info",
+                value="Make sure I have Connect and Speak permissions in voice channels!",
                 inline=False
             )
             
@@ -160,20 +162,28 @@ class BasslineBotPro(commands.Bot):
         music_manager.clear_guild_state(guild.id)
     
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """Handle voice state updates."""
+        """Handle voice state updates with improved error handling."""
         if member.id != self.user.id:
             return
         
         guild_id = member.guild.id
         
-        # Bot was disconnected
-        if before.channel and not after.channel:
-            logger.info(f"Bot disconnected from voice in guild {guild_id}")
-            music_manager.clear_guild_state(guild_id)
-        
-        # Bot moved channels
-        elif before.channel != after.channel and after.channel:
-            logger.info(f"Bot moved to {after.channel.name} in guild {guild_id}")
+        try:
+            # Bot was disconnected
+            if before.channel and not after.channel:
+                logger.info(f"Bot disconnected from voice in guild {guild_id}")
+                music_manager.clear_guild_state(guild_id)
+            
+            # Bot moved channels
+            elif before.channel != after.channel and after.channel:
+                logger.info(f"Bot moved to {after.channel.name} in guild {guild_id}")
+                
+            # Bot connected to voice
+            elif not before.channel and after.channel:
+                logger.info(f"Bot connected to {after.channel.name} in guild {guild_id}")
+                
+        except Exception as e:
+            logger.error(f"Error handling voice state update: {e}")
     
     async def on_command_error(self, ctx: commands.Context, error: Exception):
         """Handle command errors."""
@@ -184,43 +194,43 @@ class BasslineBotPro(commands.Bot):
         await self.error_handler.handle_interaction_error(interaction, error)
     
     async def start_dashboard(self):
-            """Start the web dashboard."""
-            if not settings.dashboard_enabled:
-                return
+        """Start the web dashboard."""
+        if not settings.dashboard_enabled:
+            return
+        
+        try:
+            import uvicorn
+            from src.web.dashboard import app
             
-            try:
-                import uvicorn
-                from src.web.dashboard import app
-                
-                # Run dashboard in a separate thread to avoid blocking the bot
-                config = uvicorn.Config(
-                    app,
-                    host=settings.dashboard_host,
-                    port=settings.dashboard_port,
-                    log_level="warning",  # Reduce log noise
-                    access_log=False
-                )
-                server = uvicorn.Server(config)
-                
-                # Start in background thread
-                import threading
-                def run_dashboard():
-                    import asyncio
-                    asyncio.run(server.serve())
-                
-                dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
-                dashboard_thread.start()
-                
-                logger.info(f"Dashboard started on {settings.dashboard_host}:{settings.dashboard_port}")
-                
-            except ImportError:
-                logger.warning("Dashboard dependencies not installed")
-            except Exception as e:
-                logger.error(f"Failed to start dashboard: {e}")
+            # Run dashboard in a separate thread to avoid blocking the bot
+            config = uvicorn.Config(
+                app,
+                host=settings.dashboard_host,
+                port=settings.dashboard_port,
+                log_level="warning",  # Reduce log noise
+                access_log=False
+            )
+            server = uvicorn.Server(config)
+            
+            # Start in background thread
+            import threading
+            def run_dashboard():
+                import asyncio
+                asyncio.run(server.serve())
+            
+            dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
+            dashboard_thread.start()
+            
+            logger.info(f"Dashboard started on {settings.dashboard_host}:{settings.dashboard_port}")
+            
+        except ImportError:
+            logger.warning("Dashboard dependencies not installed")
+        except Exception as e:
+            logger.error(f"Failed to start dashboard: {e}")
     
     @tasks.loop(minutes=30)
     async def cleanup_task(self):
-        """Periodic cleanup task."""
+        """Periodic cleanup task with voice connection health check."""
         try:
             # Clean up inactive voice connections
             current_time = time.time()
@@ -230,16 +240,27 @@ class BasslineBotPro(commands.Bot):
                 if current_time - last_activity > settings.idle_timeout:
                     vc = music_manager.voice_clients.get(guild_id)
                     if vc and not vc.is_playing():
-                        inactive_guilds.append(guild_id)
+                        # Check if voice connection is actually healthy
+                        if not vc.is_connected():
+                            inactive_guilds.append(guild_id)
+                        else:
+                            # Perform health check
+                            try:
+                                # If voice client exists but isn't doing anything, disconnect
+                                if not music_manager.get_queue(guild_id):  # No queue
+                                    inactive_guilds.append(guild_id)
+                            except Exception as e:
+                                logger.error(f"Error checking guild {guild_id} health: {e}")
+                                inactive_guilds.append(guild_id)
             
             for guild_id in inactive_guilds:
                 vc = music_manager.voice_clients.get(guild_id)
                 if vc:
                     try:
-                        await vc.disconnect()
-                        logger.info(f"Disconnected from inactive guild {guild_id}")
-                    except:
-                        pass
+                        await vc.disconnect(force=True)  # Force disconnect for cleanup
+                        logger.info(f"Cleaned up inactive connection for guild {guild_id}")
+                    except Exception as e:
+                        logger.error(f"Error disconnecting from guild {guild_id}: {e}")
                 music_manager.clear_guild_state(guild_id)
             
             # Clean up old downloads
