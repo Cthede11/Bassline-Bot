@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-item strong {
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .status-online {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s ease;
+            margin: 20px auto;
+            display: block;
+        }
+        
+        .refresh-btn:hover {
+            background: #5a67d8;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+        
+        .realtime-data {
+            font-family: monospace;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 {{ bot_name }}</h1>
+            <p><span class="live-indicator"></span>Professional Discord Music Bot Dashboard</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">🏢</div>
+                <div class="value" id="total-guilds">{{ stats.total_guilds or 0 }}</div>
+                <div class="label">Total Servers</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="icon">👥</div>
+                <div class="value" id="total-users">{{ stats.total_users or 0 }}</div>
+                <div class="label">Total Users</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="icon">🔊</div>
+                <div class="value" id="active-connections">{{ stats.active_connections or 0 }}</div>
+                <div class="label">Active Connections</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="icon">🎶</div>
+                <div class="value" id="songs-played">{{ stats.songs_played or 0 }}</div>
+                <div class="label">Songs Played</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="icon">📋</div>
+                <div class="value" id="total-queued">{{ stats.total_queued or 0 }}</div>
+                <div class="label">Songs Queued</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="icon">📊</div>
+                <div class="value" id="success-rate">{{ "%.1f"|format(stats.success_rate or 100) }}%</div>
+                <div class="label">Success Rate</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>📈 Performance Metrics</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Total Commands</strong>
+                    <span id="total-commands">{{ stats.total_commands or 0 }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Average Response Time</strong>
+                    <span id="avg-response">{{ "%.2f"|format(stats.avg_execution_time or 0) }}s</span>
+                </div>
+                <div class="info-item">
+                    <strong>Total Playlists</strong>
+                    <span id="total-playlists">{{ stats.total_playlists or 0 }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Bot Status</strong>
+                    <span class="status-online">🟢 Online</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔴 Live Data</h2>
+            <div class="realtime-data" id="realtime-display">
+                Loading real-time data...
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔗 Quick Links</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Metrics</strong>
+                    <a href="http://localhost:9090" target="_blank">Prometheus Metrics</a>
+                </div>
+                <div class="info-item">
+                    <strong>Health Check</strong>
+                    <a href="/health" target="_blank">Bot Health Status</a>
+                </div>
+                <div class="info-item">
+                    <strong>API Stats</strong>
+                    <a href="/api/stats" target="_blank">JSON Statistics</a>
+                </div>
+                <div class="info-item">
+                    <strong>Real-time Data</strong>
+                    <a href="/api/realtime" target="_blank">Live Bot Data</a>
+                </div>
+            </div>
+        </div>
+        
+        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Dashboard</button>
+        
+        <div class="footer">
+            <p>{{ bot_name }} Dashboard | Last updated: <span id="timestamp"></span></p>
+        </div>
+    </div>
+    
+    <script>
+        // Update timestamp
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        }
+        
+        // Fetch and update stats
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                document.getElementById('total-guilds').textContent = stats.total_guilds || 0;
+                document.getElementById('total-users').textContent = stats.total_users || 0;
+                document.getElementById('active-connections').textContent = stats.active_connections || 0;
+                document.getElementById('songs-played').textContent = stats.songs_played || 0;
+                document.getElementById('total-queued').textContent = stats.total_queued || 0;
+                document.getElementById('success-rate').textContent = (stats.success_rate || 100).toFixed(1) + '%';
+                document.getElementById('total-commands').textContent = stats.total_commands || 0;
+                document.getElementById('avg-response').textContent = (stats.avg_execution_time || 0).toFixed(2) + 's';
+                document.getElementById('total-playlists').textContent = stats.total_playlists || 0;
+                
+            } catch (error) {
+                console.error('Failed to update stats:', error);
+            }
+        }
+        
+        // Fetch and display real-time data
+        async function updateRealtimeData() {
+            try {
+                const response = await fetch('/api/realtime');
+                const data = await response.json();
+                
+                const display = document.getElementById('realtime-display');
+                display.innerHTML = `
+                    <strong>Voice Connections:</strong> ${data.voice_connections?.length || 0}<br>
+                    <strong>Active Queues:</strong> ${Object.keys(data.active_queues || {}).length}<br>
+                    <strong>Total Queued Songs:</strong> ${data.total_queued_songs || 0}<br>
+                    <strong>Last Update:</strong> ${new Date(data.timestamp).toLocaleTimeString()}<br>
+                    <strong>Bot Status:</strong> ${data.bot_status || 'unknown'}
+                `;
+                
+            } catch (error) {
+                document.getElementById('realtime-display').innerHTML = 'Failed to load real-time data';
+            }
+        }
+        
+        // Refresh all data
+        function refreshData() {
+            updateStats();
+            updateRealtimeData();
+            updateTimestamp();
+        }
+        
+        // Initial load
+        updateTimestamp();
+        updateStats();
+        updateRealtimeData();
+        
+        // Auto-refresh every 15 seconds
+        setInterval(refreshData, 15000);
+    </script>
+</body>
+</html>

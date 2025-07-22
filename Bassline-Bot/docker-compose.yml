@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: bassline-bot-pro
+    environment:
+      - DASHBOARD_ENABLED=true
+      - DASHBOARD_HOST=0.0.0.0
+      - DASHBOARD_PORT=8000
+      - METRICS_ENABLED=true
+      - DATABASE_URL=sqlite:///./data/basslinebot.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./downloads:/app/downloads
+      - ./templates:/app/templates
+      - ./.env:/app/.env:ro
+    ports:
+      - "8000:8000"  # Dashboard
+      - "9090:9090"  # Metrics
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

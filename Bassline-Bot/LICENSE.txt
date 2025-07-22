@@ -1,0 +1,65 @@
+BSD 3-Clause License
+
+Copyright (c) 2025, Christian Thede
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+---
+
+ADDITIONAL TERMS FOR BASSLINEBOT:
+
+1. COMPLIANCE WITH DISCORD TERMS OF SERVICE:
+   Users of this software must comply with Discord's Terms of Service and 
+   Community Guidelines when deploying and using this bot.
+
+2. MUSIC CONTENT DISCLAIMER:
+   This software is designed to stream music from publicly available sources.
+   Users are responsible for ensuring their use complies with applicable 
+   copyright laws and music licensing requirements in their jurisdiction.
+
+3. RATE LIMITING AND FAIR USE:
+   Users must implement appropriate rate limiting and respect the terms of 
+   service of any third-party APIs or services used by this software.
+
+4. NO COMMERCIAL HOSTING WITHOUT PERMISSION:
+   While this software is open source, commercial hosting services or 
+   paid bot hosting using this code requires explicit permission from 
+   the original author.
+
+5. ATTRIBUTION REQUIREMENT:
+   If you deploy this bot publicly or create a derivative work, you must 
+   provide clear attribution to the original BasslineBot project and it's author.
+
+6. YOUTUBE TERMS COMPLIANCE:
+   Users must comply with YouTube's Terms of Service when using the 
+   YouTube integration features of this software.
+
+7. NO ENDORSEMENT:
+   You may not use the name "BasslineBot" or the original author's name
+   to endorse or promote derivative products without explicit permission.
+
+For questions about licensing or commercial use, please contact: thedechristian11@gmail.com
