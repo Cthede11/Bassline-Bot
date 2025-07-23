@@ -117,11 +117,6 @@ class PlaylistCommands(commands.Cog):
             
             # Create database entry
             with db_manager:
-                # Ensure user exists
-                db_manager.get_or_create_user(interaction.user.id, interaction.user.display_name)
-                # Ensure guild exists
-                db_manager.get_or_create_guild(guild.id, guild.name)
-                
                 playlist = db_manager.create_playlist(
                     name=name,
                     guild_id=guild.id,
@@ -429,11 +424,10 @@ class PlaylistCommands(commands.Cog):
                     
                     status = "✅" if channel else "❌"
                     owner_name = owner.display_name if owner else "Unknown"
-                    song_count = len(playlist.songs) if hasattr(playlist, 'songs') else 0
                     
                     playlist_text.append(
                         f"{status} **{playlist.name}**\n"
-                        f"   Owner: {owner_name} | Songs: {song_count}\n"
+                        f"   Owner: {owner_name} | Songs: {len(playlist.songs)}\n"
                         f"   Channel: {channel.mention if channel else 'Deleted'}"
                     )
                 
@@ -452,56 +446,6 @@ class PlaylistCommands(commands.Cog):
             logger.error(f"Error listing playlists: {e}")
             await interaction.response.send_message("❌ Failed to list playlists.", ephemeral=True)
     
-    @app_commands.command(name="deleteplaylist", description="Delete a playlist")
-    @app_commands.describe(name="Name of the playlist to delete")
-    @app_commands.checks.has_permissions(manage_channels=True)
-    async def delete_playlist(self, interaction: discord.Interaction, name: str):
-        """Delete a playlist and its channel."""
-        try:
-            guild = interaction.guild
-            
-            # Find playlist in database
-            with db_manager:
-                playlist = db_manager.get_playlist_by_name(guild.id, name)
-            
-            if not playlist:
-                await interaction.response.send_message(f"⚠️ Playlist '{name}' not found.", ephemeral=True)
-                return
-            
-            # Check if user has permission (owner or admin)
-            if playlist.owner_id != interaction.user.id and not interaction.user.guild_permissions.administrator:
-                await interaction.response.send_message("❌ You can only delete your own playlists.", ephemeral=True)
-                return
-            
-            await interaction.response.defer()
-            
-            # Delete channel if it exists
-            if playlist.channel_id:
-                channel = guild.get_channel(playlist.channel_id)
-                if channel:
-                    try:
-                        await channel.delete(reason=f"Playlist deleted by {interaction.user}")
-                    except discord.Forbidden:
-                        pass
-            
-            # Delete from database
-            with db_manager:
-                db_manager.session.delete(playlist)
-                db_manager.session.commit()
-            
-            embed = discord.Embed(
-                title="🗑️ Playlist Deleted",
-                description=f"Successfully deleted playlist **{playlist.name}**",
-                color=discord.Color.red()
-            )
-            
-            await interaction.followup.send(embed=embed)
-            logger.info(f"Deleted playlist '{playlist.name}' in guild {guild.id}")
-            
-        except Exception as e:
-            logger.error(f"Error deleting playlist: {e}")
-            await interaction.followup.send("❌ Failed to delete playlist.", ephemeral=True)
-    
     # Error handlers
     @setup_playlists.error
     async def setup_playlists_error(self, interaction: discord.Interaction, error):
@@ -510,11 +454,6 @@ class PlaylistCommands(commands.Cog):
     
     @create_playlist.error
     async def create_playlist_error(self, interaction: discord.Interaction, error):
-        if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message("❌ You need 'Manage Channels' permission to use this command.", ephemeral=True)
-    
-    @delete_playlist.error
-    async def delete_playlist_error(self, interaction: discord.Interaction, error):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("❌ You need 'Manage Channels' permission to use this command.", ephemeral=True)
 
