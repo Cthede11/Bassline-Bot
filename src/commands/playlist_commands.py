@@ -388,6 +388,426 @@ class PlaylistCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"Error in _play_next_from_playlist: {e}")
+
+    @app_commands.command(name="myplaylists", description="View your playlists")
+    async def my_playlists(self, interaction: discord.Interaction):
+        """Show user's personal playlists."""
+        try:
+            guild_id = interaction.guild.id
+            user_id = interaction.user.id
+            
+            with db_manager:
+                playlists = db_manager.get_playlists(guild_id, owner_id=user_id)
+            
+            if not playlists:
+                embed = discord.Embed(
+                    title="📝 No Playlists Found",
+                    description="You haven't created any playlists yet.\nUse `/createplaylist` to create your first one!",
+                    color=discord.Color.orange()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="🎵 Your Playlists",
+                description=f"You have {len(playlists)} playlist(s)",
+                color=discord.Color.blue()
+            )
+            
+            for playlist in playlists[:10]:  # Limit to 10 for display
+                with db_manager:
+                    songs = db_manager.get_playlist_songs(playlist.id)
+                
+                total_duration = sum(song.duration or 0 for song in songs)
+                duration_str = format_duration(total_duration) if total_duration > 0 else "Unknown"
+                
+                channel = interaction.guild.get_channel(playlist.channel_id) if playlist.channel_id else None
+                channel_status = "✅ Active" if channel else "❌ Channel Deleted"
+                
+                embed.add_field(
+                    name=f"📚 {playlist.name}",
+                    value=f"**Songs:** {len(songs)}\n**Duration:** {duration_str}\n**Status:** {channel_status}",
+                    inline=True
+                )
+            
+            embed.set_footer(text="Use /playplaylist <name> to play a playlist")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"Error showing user playlists: {e}")
+            await interaction.response.send_message("❌ Failed to load your playlists.", ephemeral=True)
+
+    @app_commands.command(name="addtoplaylist", description="Add current song or search to a playlist")
+    @app_commands.describe(
+        playlist_name="Name of the playlist to add to",
+        query="Song to search for (leave empty to add current song)"
+    )
+    async def add_to_playlist(self, interaction: discord.Interaction, playlist_name: str, query: Optional[str] = None):
+        """Add a song to a playlist."""
+        try:
+            await interaction.response.defer()
+            
+            guild_id = interaction.guild.id
+            user_id = interaction.user.id
+            
+            # Find the playlist
+            with db_manager:
+                playlist = db_manager.get_playlist_by_name(guild_id, playlist_name)
+            
+            if not playlist:
+                await interaction.followup.send(f"❌ Playlist '{playlist_name}' not found.", ephemeral=True)
+                return
+            
+            # Check if user owns the playlist or has admin permissions
+            if playlist.owner_id != user_id and not interaction.user.guild_permissions.administrator:
+                await interaction.followup.send("❌ You can only add songs to your own playlists.", ephemeral=True)
+                return
+            
+            # Determine what song to add
+            song_info = None
+            
+            if query:
+                # Search for the song
+                try:
+                    search_results = await youtube_manager.search(query, limit=1)
+                    if search_results:
+                        song_info = search_results[0]
+                    else:
+                        await interaction.followup.send(f"❌ No results found for '{query}'.", ephemeral=True)
+                        return
+                except YouTubeError as e:
+                    await interaction.followup.send(f"❌ Search failed: {str(e)}", ephemeral=True)
+                    return
+            else:
+                # Use currently playing song
+                now_playing = music_manager.get_now_playing(guild_id)
+                if not now_playing:
+                    await interaction.followup.send("❌ No song is currently playing. Please specify a song to search for.", ephemeral=True)
+                    return
+                
+                track = now_playing.track
+                song_info = {
+                    'title': track.title,
+                    'url': track.url,
+                    'duration': track.duration
+                }
+            
+            # Add song to playlist
+            with db_manager:
+                song = db_manager.add_song_to_playlist(
+                    playlist_id=playlist.id,
+                    title=song_info['title'],
+                    url=song_info['url'],
+                    added_by=user_id,
+                    duration=song_info.get('duration')
+                )
+            
+            embed = discord.Embed(
+                title="✅ Song Added to Playlist",
+                description=f"Added **{song_info['title']}** to playlist **{playlist.name}**",
+                color=discord.Color.green()
+            )
+            
+            if song_info.get('duration'):
+                embed.add_field(name="Duration", value=format_duration(song_info['duration']), inline=True)
+            
+            # Get updated song count
+            with db_manager:
+                total_songs = len(db_manager.get_playlist_songs(playlist.id))
+            
+            embed.add_field(name="Playlist Size", value=f"{total_songs} songs", inline=True)
+            
+            await interaction.followup.send(embed=embed)
+            logger.info(f"Added song to playlist {playlist.name} by user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error adding song to playlist: {e}")
+            await interaction.followup.send("❌ Failed to add song to playlist.", ephemeral=True)
+
+    @app_commands.command(name="playplaylist", description="Play a playlist")
+    @app_commands.describe(playlist_name="Name of the playlist to play")
+    async def play_playlist(self, interaction: discord.Interaction, playlist_name: str):
+        """Play all songs from a playlist."""
+        try:
+            await interaction.response.defer()
+            
+            guild_id = interaction.guild.id
+            
+            # Check if user is in voice channel
+            if not interaction.user.voice or not interaction.user.voice.channel:
+                await interaction.followup.send("❌ You must be in a voice channel to play a playlist.", ephemeral=True)
+                return
+            
+            # Find the playlist
+            with db_manager:
+                playlist = db_manager.get_playlist_by_name(guild_id, playlist_name)
+            
+            if not playlist:
+                await interaction.followup.send(f"❌ Playlist '{playlist_name}' not found.", ephemeral=True)
+                return
+            
+            # Get playlist songs
+            with db_manager:
+                songs = db_manager.get_playlist_songs(playlist.id)
+            
+            if not songs:
+                await interaction.followup.send(f"❌ Playlist '{playlist.name}' is empty.", ephemeral=True)
+                return
+            
+            # Join voice channel
+            from src.utils.discord_voice import join_voice_channel
+            vc = await join_voice_channel(interaction, interaction.user.voice.channel)
+            if not vc:
+                return
+            
+            # Add all songs to queue
+            added_count = 0
+            for song in songs:
+                try:
+                    # Create track object
+                    track = Track(
+                        query=song.url,
+                        title=song.title,
+                        url=song.url,
+                        duration=song.duration or 0,
+                        thumbnail="",  # Could enhance this later
+                        uploader="",
+                        requested_by=interaction.user
+                    )
+                    
+                    # Add to queue
+                    if await music_manager.add_to_queue(guild_id, track):
+                        added_count += 1
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to add song {song.title} to queue: {e}")
+                    continue
+            
+            if added_count == 0:
+                await interaction.followup.send("❌ Failed to add any songs from the playlist.", ephemeral=True)
+                return
+            
+            # Start playing if not already playing
+            if not music_manager.is_playing(guild_id):
+                await self._start_playback(guild_id)
+            
+            # Create response embed
+            embed = discord.Embed(
+                title="🎵 Playlist Added to Queue",
+                description=f"Added **{added_count}** songs from playlist **{playlist.name}**",
+                color=discord.Color.green()
+            )
+            
+            total_duration = sum(song.duration or 0 for song in songs)
+            if total_duration > 0:
+                embed.add_field(name="Total Duration", value=format_duration(total_duration), inline=True)
+            
+            queue_length = len(music_manager.get_queue(guild_id))
+            embed.add_field(name="Queue Size", value=f"{queue_length} songs", inline=True)
+            
+            # Add playlist info
+            owner = interaction.guild.get_member(playlist.owner_id)
+            if owner:
+                embed.add_field(name="Created by", value=owner.display_name, inline=True)
+            
+            await interaction.followup.send(embed=embed)
+            logger.info(f"Played playlist {playlist.name} with {added_count} songs")
+            
+        except Exception as e:
+            logger.error(f"Error playing playlist: {e}")
+            await interaction.followup.send("❌ Failed to play playlist.", ephemeral=True)
+
+    @app_commands.command(name="deleteplaylist", description="Delete one of your playlists")
+    @app_commands.describe(playlist_name="Name of the playlist to delete")
+    async def delete_playlist(self, interaction: discord.Interaction, playlist_name: str):
+        """Delete a user's playlist."""
+        try:
+            guild_id = interaction.guild.id
+            user_id = interaction.user.id
+            
+            # Find the playlist
+            with db_manager:
+                playlist = db_manager.get_playlist_by_name(guild_id, playlist_name)
+            
+            if not playlist:
+                await interaction.response.send_message(f"❌ Playlist '{playlist_name}' not found.", ephemeral=True)
+                return
+            
+            # Check ownership or admin permissions
+            if playlist.owner_id != user_id and not interaction.user.guild_permissions.administrator:
+                await interaction.response.send_message("❌ You can only delete your own playlists.", ephemeral=True)
+                return
+            
+            # Get song count for confirmation
+            with db_manager:
+                songs = db_manager.get_playlist_songs(playlist.id)
+                song_count = len(songs)
+            
+            # Create confirmation embed
+            embed = discord.Embed(
+                title="⚠️ Confirm Playlist Deletion",
+                description=f"Are you sure you want to delete playlist **{playlist.name}**?",
+                color=discord.Color.orange()
+            )
+            embed.add_field(name="Songs", value=f"{song_count} songs will be deleted", inline=True)
+            embed.add_field(name="This action", value="Cannot be undone", inline=True)
+            
+            # Create confirmation view
+            class ConfirmView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=30)
+                    self.confirmed = False
+                
+                @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️")
+                async def confirm_delete(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    if button_interaction.user.id != user_id:
+                        await button_interaction.response.send_message("❌ Only the command user can confirm.", ephemeral=True)
+                        return
+                    
+                    try:
+                        # Delete from database (should cascade to songs)
+                        with db_manager:
+                            db_manager.session.delete(playlist)
+                            db_manager.session.commit()
+                        
+                        # Delete Discord channel if exists
+                        if playlist.channel_id:
+                            channel = interaction.guild.get_channel(playlist.channel_id)
+                            if channel:
+                                await channel.delete()
+                        
+                        success_embed = discord.Embed(
+                            title="✅ Playlist Deleted",
+                            description=f"Playlist **{playlist.name}** has been deleted successfully.",
+                            color=discord.Color.green()
+                        )
+                        
+                        await button_interaction.response.edit_message(embed=success_embed, view=None)
+                        logger.info(f"Deleted playlist {playlist.name} by user {user_id}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error deleting playlist: {e}")
+                        await button_interaction.response.edit_message(
+                            content="❌ Failed to delete playlist.",
+                            embed=None,
+                            view=None
+                        )
+                
+                @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
+                async def cancel_delete(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                    if button_interaction.user.id != user_id:
+                        await button_interaction.response.send_message("❌ Only the command user can cancel.", ephemeral=True)
+                        return
+                    
+                    cancel_embed = discord.Embed(
+                        title="❌ Deletion Cancelled",
+                        description="Playlist deletion was cancelled.",
+                        color=discord.Color.blue()
+                    )
+                    await button_interaction.response.edit_message(embed=cancel_embed, view=None)
+            
+            view = ConfirmView()
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"Error in delete playlist command: {e}")
+            await interaction.response.send_message("❌ Failed to delete playlist.", ephemeral=True)
+
+    @app_commands.command(name="playlistinfo", description="Show detailed information about a playlist")
+    @app_commands.describe(playlist_name="Name of the playlist to view")
+    async def playlist_info(self, interaction: discord.Interaction, playlist_name: str):
+        """Show detailed playlist information."""
+        try:
+            guild_id = interaction.guild.id
+            
+            # Find the playlist
+            with db_manager:
+                playlist = db_manager.get_playlist_by_name(guild_id, playlist_name)
+            
+            if not playlist:
+                await interaction.response.send_message(f"❌ Playlist '{playlist_name}' not found.", ephemeral=True)
+                return
+            
+            # Get playlist songs
+            with db_manager:
+                songs = db_manager.get_playlist_songs(playlist.id)
+            
+            # Create main embed
+            embed = discord.Embed(
+                title=f"🎵 {playlist.name}",
+                color=discord.Color.blue()
+            )
+            
+            # Add playlist info
+            owner = interaction.guild.get_member(playlist.owner_id)
+            embed.add_field(name="Owner", value=owner.display_name if owner else "Unknown", inline=True)
+            embed.add_field(name="Songs", value=str(len(songs)), inline=True)
+            
+            # Calculate total duration
+            total_duration = sum(song.duration or 0 for song in songs)
+            if total_duration > 0:
+                embed.add_field(name="Duration", value=format_duration(total_duration), inline=True)
+            
+            # Channel status
+            if playlist.channel_id:
+                channel = interaction.guild.get_channel(playlist.channel_id)
+                status = f"✅ {channel.mention}" if channel else "❌ Channel Deleted"
+                embed.add_field(name="Channel", value=status, inline=True)
+            
+            # Show first 10 songs
+            if songs:
+                song_list = []
+                for i, song in enumerate(songs[:10], 1):
+                    duration_str = format_duration(song.duration) if song.duration else "Unknown"
+                    song_list.append(f"`{i:2}.` **{song.title}** ({duration_str})")
+                
+                embed.add_field(
+                    name="Songs" + (f" (showing first 10 of {len(songs)})" if len(songs) > 10 else ""),
+                    value="\n".join(song_list),
+                    inline=False
+                )
+            else:
+                embed.add_field(name="Songs", value="*This playlist is empty*", inline=False)
+            
+            # Add creation date if available
+            if hasattr(playlist, 'created_at') and playlist.created_at:
+                embed.set_footer(text=f"Created: {playlist.created_at.strftime('%Y-%m-%d %H:%M')}")
+            
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error showing playlist info: {e}")
+            await interaction.response.send_message("❌ Failed to load playlist information.", ephemeral=True)
+
+    async def _start_playback(self, guild_id: int):
+        """Helper method to start playback."""
+        try:
+            track = music_manager.get_next_track(guild_id)
+            if not track:
+                return
+            
+            vc = music_manager.voice_clients.get(guild_id)
+            if not vc or not vc.is_connected():
+                return
+            
+            # Import here to avoid circular imports
+            from src.utils.discord_voice import create_audio_source
+            
+            # Create audio source
+            audio_source = await create_audio_source(track)
+            
+            # Set now playing and start playback
+            music_manager.set_now_playing(guild_id, track, vc)
+            
+            def after_callback(error):
+                if error:
+                    logger.error(f"Playback error in guild {guild_id}: {error}")
+                # Could add auto-next logic here if needed
+            
+            vc.play(audio_source, after=after_callback)
+            
+        except Exception as e:
+            logger.error(f"Error starting playback: {e}")
     
     @app_commands.command(name="listplaylists", description="List all playlists in this server")
     async def list_playlists(self, interaction: discord.Interaction):
@@ -459,3 +879,5 @@ class PlaylistCommands(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(PlaylistCommands(bot))
+
+    

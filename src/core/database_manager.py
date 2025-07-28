@@ -195,6 +195,104 @@ class DatabaseManager:
             stats['avg_execution_time'] = sum(execution_times) / len(execution_times)
         
         return stats
+    
+    # Add these methods to your DatabaseManager class in src/core/database_manager.py
+
+    def delete_playlist(self, playlist_id: int) -> bool:
+        """Delete a playlist and all its songs."""
+        try:
+            playlist = self.session.query(Playlist).filter(Playlist.id == playlist_id).first()
+            if playlist:
+                # Delete all songs in the playlist first
+                self.session.query(Song).filter(Song.playlist_id == playlist_id).delete()
+                # Delete the playlist
+                self.session.delete(playlist)
+                self.session.commit()
+                logger.info(f"Deleted playlist {playlist_id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting playlist: {e}")
+            self.session.rollback()
+            return False
+    
+    def remove_song_from_playlist(self, playlist_id: int, song_id: int) -> bool:
+        """Remove a specific song from a playlist."""
+        try:
+            song = self.session.query(Song).filter(
+                Song.id == song_id,
+                Song.playlist_id == playlist_id
+            ).first()
+            
+            if song:
+                self.session.delete(song)
+                self.session.commit()
+                
+                # Reorder remaining songs
+                remaining_songs = self.session.query(Song).filter(
+                    Song.playlist_id == playlist_id
+                ).order_by(Song.position).all()
+                
+                for i, remaining_song in enumerate(remaining_songs, 1):
+                    remaining_song.position = i
+                
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error removing song from playlist: {e}")
+            self.session.rollback()
+            return False
+    
+    def get_playlist_by_id(self, playlist_id: int) -> Optional[Playlist]:
+        """Get a playlist by ID."""
+        return self.session.query(Playlist).filter(Playlist.id == playlist_id).first()
+    
+    def search_playlists(self, guild_id: int, search_term: str, limit: int = 10) -> List[Playlist]:
+        """Search playlists by name."""
+        return self.session.query(Playlist).filter(
+            Playlist.guild_id == guild_id,
+            Playlist.name.ilike(f"%{search_term}%")
+        ).limit(limit).all()
+    
+    def update_playlist(self, playlist_id: int, **kwargs) -> bool:
+        """Update playlist properties."""
+        try:
+            playlist = self.session.query(Playlist).filter(Playlist.id == playlist_id).first()
+            if playlist:
+                for key, value in kwargs.items():
+                    if hasattr(playlist, key):
+                        setattr(playlist, key, value)
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating playlist: {e}")
+            self.session.rollback()
+            return False
+    
+    def get_user_playlist_count(self, user_id: int, guild_id: int) -> int:
+        """Get the number of playlists a user has created."""
+        return self.session.query(Playlist).filter(
+            Playlist.owner_id == user_id,
+            Playlist.guild_id == guild_id
+        ).count()
+    
+    def get_popular_playlists(self, guild_id: int, limit: int = 10) -> List[Playlist]:
+        """Get playlists sorted by song count (popularity)."""
+        # This requires a more complex query joining with songs
+        from sqlalchemy import func
+        
+        result = self.session.query(
+            Playlist,
+            func.count(Song.id).label('song_count')
+        ).outerjoin(Song).filter(
+            Playlist.guild_id == guild_id
+        ).group_by(Playlist.id).order_by(
+            func.count(Song.id).desc()
+        ).limit(limit).all()
+        
+        return [playlist for playlist, song_count in result]
 
 # Global database manager instance
 db_manager = DatabaseManager()
