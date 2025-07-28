@@ -5,12 +5,13 @@ from typing import Optional
 
 from src.core.music_manager import Track
 from src.utils.youtube import youtube_manager, YouTubeError
+from src.utils.non_disruptive_voice import voice_manager  # NEW IMPORT
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 async def join_voice_channel(interaction: discord.Interaction, channel: discord.VoiceChannel) -> Optional[discord.VoiceClient]:
-    """Join a voice channel."""
+    """Join a voice channel using non-disruptive methods."""
     try:
         # Check if bot is already connected
         if interaction.guild.voice_client:
@@ -20,14 +21,21 @@ async def join_voice_channel(interaction: discord.Interaction, channel: discord.
                 await interaction.guild.voice_client.move_to(channel)
                 return interaction.guild.voice_client
         
-        # Connect to channel
-        vc = await channel.connect(timeout=15.0)
-        logger.info(f"Connected to voice channel: {channel.name} in guild {interaction.guild.id}")
-        return vc
+        # Try non-disruptive connection - UPDATED METHOD
+        vc = await voice_manager.connect_with_peak_hour_strategy(channel)
         
-    except asyncio.TimeoutError:
-        await interaction.followup.send("❌ Timed out connecting to voice channel.", ephemeral=True)
-        return None
+        if vc:
+            logger.info(f"Connected to voice channel: {channel.name} in guild {interaction.guild.id}")
+            return vc
+        else:
+            # Connection was queued
+            await interaction.followup.send(
+                "🟡 Voice connection queued due to Discord peak hour issues. "
+                "You'll be notified when connected! Use `/status` to check progress.",
+                ephemeral=True
+            )
+            return None
+        
     except discord.Forbidden:
         await interaction.followup.send("❌ I don't have permission to join that voice channel.", ephemeral=True)
         return None
