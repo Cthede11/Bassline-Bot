@@ -209,8 +209,10 @@ class EnhancedHealthMonitor:
             recommendations = []
             
             # Test basic connection
+            from sqlalchemy import text
+
             with engine.connect() as conn:
-                result = conn.execute("SELECT 1").fetchone()
+                result = conn.execute(text("SELECT 1")).fetchone()
                 if not result:
                     raise Exception("Database query returned no result")
             
@@ -797,7 +799,7 @@ class EnhancedHealthMonitor:
                     
                     # Recent command usage (last 24 hours)
                     recent_usage = db_manager.session.query(Usage).filter(
-                        Usage.created_at >= datetime.utcnow() - timedelta(hours=24)
+                        Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
                     ).all()
                     
                     total_commands = len(recent_usage)

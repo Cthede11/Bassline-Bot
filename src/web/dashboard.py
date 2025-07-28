@@ -270,12 +270,25 @@ async def get_database_info():
             
             # Recent activity
             recent_usage = db_manager.session.query(Usage).filter(
-                Usage.created_at >= datetime.utcnow() - timedelta(hours=24)
+                Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
             ).count()
             
             # Database connection info
             from sqlalchemy import text
-            db_version = db_manager.session.execute(text("SELECT version()")).scalar()
+            try:
+                if settings.database_url.startswith("sqlite"):
+                    # SQLite version query
+                    db_version = db_manager.session.execute(text("SELECT sqlite_version()")).scalar()
+                    db_version = f"SQLite {db_version}"
+                elif settings.database_url.startswith("postgresql"):
+                    # PostgreSQL version query
+                    db_version = db_manager.session.execute(text("SELECT version()")).scalar()
+                else:
+                    # Generic fallback
+                    db_version = "Unknown database type"
+            except Exception as e:
+                logger.warning(f"Could not determine database version: {e}")
+                db_version = "Version unavailable"
             
         # Connection pool info (if applicable)
         pool_info = {}
@@ -351,7 +364,7 @@ async def get_performance_metrics():
         with db_manager:
             # Recent command usage (last 24 hours)
             recent_commands = db_manager.session.query(Usage).filter(
-                Usage.created_at >= datetime.utcnow() - timedelta(hours=24)
+                Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
             ).all()
             
             # Command success rate
