@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional
+import random
 
 from src.core.music_manager import music_manager, Track
 from src.core.database_manager import db_manager
@@ -782,19 +783,32 @@ class PlaylistCommands(commands.Cog):
     async def _start_playback(self, guild_id: int):
         """Helper method to start playback."""
         try:
-            track = music_manager.get_next_track(guild_id)
-            if not track:
+            queue = music_manager.get_queue(guild_id)
+            if not queue:
                 return
             
             vc = music_manager.voice_clients.get(guild_id)
             if not vc or not vc.is_connected():
                 return
+                
+            # Check if already playing
+            if music_manager.is_playing(guild_id):
+                return
+            
+            # Get next track
+            track = music_manager.get_next_track(guild_id)
+            if not track:
+                return
             
             # Import here to avoid circular imports
             from src.utils.discord_voice import create_audio_source
             
+            # Get user preferences
+            bass_boost = music_manager.get_bass_boost(track.requested_by.id)
+            volume = music_manager.get_user_volume(track.requested_by.id)
+            
             # Create audio source
-            audio_source = await create_audio_source(track)
+            audio_source = await create_audio_source(track, bass_boost=bass_boost, volume=volume)
             
             # Set now playing and start playback
             music_manager.set_now_playing(guild_id, track, vc)
@@ -808,7 +822,8 @@ class PlaylistCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"Error starting playback: {e}")
-    
+
+            
     @app_commands.command(name="listplaylists", description="List all playlists in this server")
     async def list_playlists(self, interaction: discord.Interaction):
         """List all playlists in the server."""

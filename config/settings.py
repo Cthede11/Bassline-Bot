@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     spotify_client_id: Optional[str] = None
     spotify_client_secret: Optional[str] = None
     youtube_api_key: Optional[str] = None
+
+    # CORS config
+    cors_enabled: bool = True
+    cors_origins: str = "http://localhost:8080,http://127.0.0.1:8080"
     
     @field_validator('log_level')
     @classmethod

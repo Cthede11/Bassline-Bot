@@ -3,346 +3,1212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ bot_name }} Dashboard</title>
+    <title>{{ bot_name }} - Comprehensive Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #ffffff;
             min-height: 100vh;
-            color: #333;
         }
-        
-        .container {
-            max-width: 1200px;
+
+        .dashboard-container {
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            color: white;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
         }
-        
+
         .header h1 {
-            font-size: 3rem;
+            font-size: 2.5em;
             margin-bottom: 10px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        .live-indicator {
+
+        .status-indicator {
             display: inline-block;
-            width: 10px;
-            height: 10px;
-            background: #28a745;
-            border-radius: 50%;
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stat-card .icon {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-        }
-        
-        .stat-card .value {
-            font-size: 2rem;
+            padding: 5px 15px;
+            border-radius: 20px;
             font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
+            margin-left: 10px;
         }
-        
-        .stat-card .label {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .section {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+
+        .status-healthy { background: #4CAF50; }
+        .status-degraded { background: #FF9800; }
+        .status-unhealthy { background: #F44336; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
             margin-bottom: 30px;
         }
-        
-        .section h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.5rem;
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
         }
-        
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+
+        .card:hover {
+            transform: translateY(-5px);
         }
-        
-        .info-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
-        
-        .info-item strong {
-            color: #333;
-            display: block;
-            margin-bottom: 5px;
-        }
-        
-        .status-online {
-            color: #28a745;
+
+        .card-title {
+            font-size: 1.3em;
             font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        
-        .refresh-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s ease;
-            margin: 20px auto;
-            display: block;
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        .refresh-btn:hover {
-            background: #5a67d8;
+
+        .metric:last-child {
+            border-bottom: none;
         }
-        
-        .footer {
-            text-align: center;
-            color: white;
-            margin-top: 40px;
-            opacity: 0.8;
+
+        .metric-value {
+            font-weight: bold;
+            color: #4CAF50;
         }
-        
-        .realtime-data {
-            font-family: monospace;
-            font-size: 0.9rem;
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            max-height: 200px;
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+        }
+
+        .guild-list {
+            max-height: 400px;
             overflow-y: auto;
         }
-        
+
+        .guild-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .guild-item.voice-connected {
+            border-left-color: #2196F3;
+        }
+
+        .guild-item.has-issues {
+            border-left-color: #FF5722;
+        }
+
+        .error-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .error-item {
+            background: rgba(244, 67, 54, 0.1);
+            border-left: 4px solid #F44336;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .error-item.warning {
+            background: rgba(255, 152, 0, 0.1);
+            border-left-color: #FF9800;
+        }
+
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            border: none;
+            background: transparent;
+            color: white;
+            font-size: 1em;
+        }
+
+        .tab.active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+
+        .auto-refresh {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .refresh-indicator {
+            width: 12px;
+            height: 12px;
+            border: 2px solid white;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .troubleshooting-section {
+            margin-top: 30px;
+        }
+
+        .issue-critical {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #F44336;
+        }
+
+        .issue-warning {
+            background: rgba(255, 152, 0, 0.2);
+            border: 1px solid #FF9800;
+        }
+
+        .recommendation {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
         @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2rem;
+            .grid {
+                grid-template-columns: 1fr;
             }
             
-            .container {
-                padding: 10px;
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .tabs {
+                flex-direction: column;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="dashboard-container">
         <div class="header">
-            <h1>🎵 {{ bot_name }}</h1>
-            <p><span class="live-indicator"></span>Discord Music Bot Dashboard</p>
+            <h1><i class="fas fa-music"></i> {{ bot_name }} Dashboard</h1>
+            <p>Comprehensive Monitoring & Diagnostics</p>
+            <span id="status-indicator" class="status-indicator status-healthy">System Healthy</span>
         </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="icon">🏢</div>
-                <div class="value" id="total-guilds">{{ stats.total_guilds or 0 }}</div>
-                <div class="label">Total Servers</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="icon">👥</div>
-                <div class="value" id="total-users">{{ stats.total_users or 0 }}</div>
-                <div class="label">Total Users</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="icon">🔊</div>
-                <div class="value" id="active-connections">{{ stats.active_connections or 0 }}</div>
-                <div class="label">Active Connections</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="icon">🎶</div>
-                <div class="value" id="songs-played">{{ stats.songs_played or 0 }}</div>
-                <div class="label">Songs Played</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="icon">📋</div>
-                <div class="value" id="total-queued">{{ stats.total_queued or 0 }}</div>
-                <div class="label">Songs Queued</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="icon">📊</div>
-                <div class="value" id="success-rate">{{ "%.1f"|format(stats.success_rate or 100) }}%</div>
-                <div class="label">Success Rate</div>
+
+        <div class="auto-refresh">
+            <div class="refresh-indicator"></div>
+            <span>Live Updates</span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">Overview</button>
+            <button class="tab" onclick="showTab('discord')">Discord</button>
+            <button class="tab" onclick="showTab('system')">System</button>
+            <button class="tab" onclick="showTab('database')">Database</button>
+            <button class="tab" onclick="showTab('performance')">Performance</button>
+            <button class="tab" onclick="showTab('troubleshooting')">Troubleshooting</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-robot"></i>
+                            Bot Status
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span>Status</span>
+                        <span id="bot-status" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Uptime</span>
+                        <span id="bot-uptime" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Latency</span>
+                        <span id="bot-latency" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Guilds</span>
+                        <span id="guild-count" class="metric-value">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-line"></i>
+                            Quick Stats
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span>Total Members</span>
+                        <span id="total-members" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Voice Connections</span>
+                        <span id="voice-connections" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Queued Tracks</span>
+                        <span id="queued-tracks" class="metric-value">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Active Playlists</span>
+                        <span id="active-playlists" class="metric-value">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-server"></i>
+                            System Resources
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span>CPU Usage</span>
+                        <div>
+                            <div class="progress-bar">
+                                <div id="cpu-progress" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <span id="cpu-percent" class="metric-value">0%</span>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span>Memory Usage</span>
+                        <div>
+                            <div class="progress-bar">
+                                <div id="memory-progress" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <span id="memory-percent" class="metric-value">0%</span>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span>Disk Usage</span>
+                        <div>
+                            <div class="progress-bar">
+                                <div id="disk-progress" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <span id="disk-percent" class="metric-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Recent Issues
+                        </div>
+                    </div>
+                    <div id="recent-issues">
+                        <p>Loading issues...</p>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <div class="section">
-            <h2>📈 Performance Metrics</h2>
-            <div class="info-grid">
-                <div class="info-item">
-                    <strong>Total Commands</strong>
-                    <span id="total-commands">{{ stats.total_commands or 0 }}</span>
+
+        <!-- Discord Tab -->
+        <div id="discord" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fab fa-discord"></i>
+                            Discord Connection
+                        </div>
+                    </div>
+                    <div id="discord-connection-info">
+                        <p>Loading Discord information...</p>
+                    </div>
                 </div>
-                <div class="info-item">
-                    <strong>Average Response Time</strong>
-                    <span id="avg-response">{{ "%.2f"|format(stats.avg_execution_time or 0) }}s</span>
-                </div>
-                <div class="info-item">
-                    <strong>Total Playlists</strong>
-                    <span id="total-playlists">{{ stats.total_playlists or 0 }}</span>
-                </div>
-                <div class="info-item">
-                    <strong>Bot Status</strong>
-                    <span class="status-online">🟢 Online</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>🔴 Live Data</h2>
-            <div class="realtime-data" id="realtime-display">
-                Loading real-time data...
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>🔗 Quick Links</h2>
-            <div class="info-grid">
-                <div class="info-item">
-                    <strong>Metrics</strong>
-                    <a href="http://localhost:9090" target="_blank">Prometheus Metrics</a>
-                </div>
-                <div class="info-item">
-                    <strong>Health Check</strong>
-                    <a href="/health" target="_blank">Bot Health Status</a>
-                </div>
-                <div class="info-item">
-                    <strong>API Stats</strong>
-                    <a href="/api/stats" target="_blank">JSON Statistics</a>
-                </div>
-                <div class="info-item">
-                    <strong>Real-time Data</strong>
-                    <a href="/api/realtime" target="_blank">Live Bot Data</a>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-users"></i>
+                            Guild Information
+                        </div>
+                    </div>
+                    <div id="guild-list" class="guild-list">
+                        <p>Loading guilds...</p>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Dashboard</button>
-        
-        <div class="footer">
-            <p>{{ bot_name }} Dashboard | Last updated: <span id="timestamp"></span></p>
+
+        <!-- System Tab -->
+        <div id="system" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-microchip"></i>
+                            System Information
+                        </div>
+                    </div>
+                    <div id="system-info">
+                        <p>Loading system information...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-memory"></i>
+                            Process Information
+                        </div>
+                    </div>
+                    <div id="process-info">
+                        <p>Loading process information...</p>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-area"></i>
+                            Resource Usage Over Time
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="resourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Tab -->
+        <div id="database" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-database"></i>
+                            Database Statistics
+                        </div>
+                    </div>
+                    <div id="database-stats">
+                        <p>Loading database statistics...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-link"></i>
+                            Connection Information
+                        </div>
+                    </div>
+                    <div id="database-connection">
+                        <p>Loading connection information...</p>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            Data Distribution
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="databaseChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Tab -->
+        <div id="performance" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-tachometer-alt"></i>
+                            Command Performance
+                        </div>
+                    </div>
+                    <div id="command-performance">
+                        <p>Loading performance metrics...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-music"></i>
+                            Music System Performance
+                        </div>
+                    </div>
+                    <div id="music-performance">
+                        <p>Loading music performance...</p>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-bar"></i>
+                            Popular Commands (24h)
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="commandChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-bug"></i>
+                            Error Log
+                        </div>
+                    </div>
+                    <div id="error-log" class="error-list">
+                        <p>Loading error information...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Troubleshooting Tab -->
+        <div id="troubleshooting" class="tab-content">
+            <div class="troubleshooting-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-tools"></i>
+                            System Diagnostics
+                        </div>
+                    </div>
+                    <div id="diagnostics-info">
+                        <p>Running diagnostics...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-lightbulb"></i>
+                            Recommendations
+                        </div>
+                    </div>
+                    <div id="recommendations">
+                        <p>Loading recommendations...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
     <script>
-        // Update timestamp
-        function updateTimestamp() {
-            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        let socket = null;
+        let charts = {};
+        let resourceData = {
+            labels: [],
+            cpu: [],
+            memory: [],
+            timestamp: Date.now()
+        };
+
+        // Initialize WebSocket connection
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = function(event) {
+                console.log('WebSocket connected');
+            };
+            
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                updateDashboard(data);
+            };
+            
+            socket.onclose = function(event) {
+                console.log('WebSocket disconnected, attempting to reconnect...');
+                setTimeout(initWebSocket, 5000);
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
         }
-        
-        // Fetch and update stats
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const stats = await response.json();
-                
-                document.getElementById('total-guilds').textContent = stats.total_guilds || 0;
-                document.getElementById('total-users').textContent = stats.total_users || 0;
-                document.getElementById('active-connections').textContent = stats.active_connections || 0;
-                document.getElementById('songs-played').textContent = stats.songs_played || 0;
-                document.getElementById('total-queued').textContent = stats.total_queued || 0;
-                document.getElementById('success-rate').textContent = (stats.success_rate || 100).toFixed(1) + '%';
-                document.getElementById('total-commands').textContent = stats.total_commands || 0;
-                document.getElementById('avg-response').textContent = (stats.avg_execution_time || 0).toFixed(2) + 's';
-                document.getElementById('total-playlists').textContent = stats.total_playlists || 0;
-                
-            } catch (error) {
-                console.error('Failed to update stats:', error);
+
+        // Update dashboard with new data
+        function updateDashboard(data) {
+            updateOverview(data);
+            updateDiscordTab(data);
+            updateSystemTab(data);
+            updateDatabaseTab(data);
+            updatePerformanceTab(data);
+            updateTroubleshootingTab(data);
+            updateCharts(data);
+        }
+
+        function updateOverview(data) {
+            if (data.discord && data.discord.bot) {
+                const bot = data.discord.bot;
+                document.getElementById('bot-status').textContent = bot.is_ready ? 'Online' : 'Offline';
+                document.getElementById('bot-uptime').textContent = formatUptime(bot.uptime);
+                document.getElementById('bot-latency').textContent = Math.round(bot.latency) + 'ms';
+            }
+
+            if (data.discord && data.discord.totals) {
+                const totals = data.discord.totals;
+                document.getElementById('guild-count').textContent = totals.guild_count || 0;
+                document.getElementById('total-members').textContent = totals.total_members || 0;
+                document.getElementById('voice-connections').textContent = totals.active_voice_connections || 0;
+                document.getElementById('queued-tracks').textContent = totals.total_queued_tracks || 0;
+            }
+
+            if (data.database && data.database.tables) {
+                document.getElementById('active-playlists').textContent = data.database.tables.playlists || 0;
+            }
+
+            if (data.system && data.system.system) {
+                const system = data.system.system;
+                updateProgressBar('cpu', system.cpu_percent);
+                updateProgressBar('memory', system.memory.percent);
+                updateProgressBar('disk', system.disk.percent);
+            }
+
+            if (data.troubleshooting && data.troubleshooting.issues) {
+                updateRecentIssues(data.troubleshooting.issues);
+            }
+
+            // Update status indicator
+            updateStatusIndicator(data.troubleshooting);
+        }
+
+        function updateDiscordTab(data) {
+            if (data.discord) {
+                updateDiscordConnection(data.discord.bot);
+                updateGuildList(data.discord.guilds);
             }
         }
-        
-        // Fetch and display real-time data
-        async function updateRealtimeData() {
-            try {
-                const response = await fetch('/api/realtime');
-                const data = await response.json();
-                
-                const display = document.getElementById('realtime-display');
-                display.innerHTML = `
-                    <strong>Voice Connections:</strong> ${data.voice_connections?.length || 0}<br>
-                    <strong>Active Queues:</strong> ${Object.keys(data.active_queues || {}).length}<br>
-                    <strong>Total Queued Songs:</strong> ${data.total_queued_songs || 0}<br>
-                    <strong>Last Update:</strong> ${new Date(data.timestamp).toLocaleTimeString()}<br>
-                    <strong>Bot Status:</strong> ${data.bot_status || 'unknown'}
-                `;
-                
-            } catch (error) {
-                document.getElementById('realtime-display').innerHTML = 'Failed to load real-time data';
+
+        function updateSystemTab(data) {
+            if (data.system) {
+                updateSystemInfo(data.system.system);
+                updateProcessInfo(data.system.process);
             }
         }
-        
-        // Refresh all data
-        function refreshData() {
-            updateStats();
-            updateRealtimeData();
-            updateTimestamp();
+
+        function updateDatabaseTab(data) {
+            if (data.database) {
+                updateDatabaseStats(data.database);
+                updateDatabaseConnection(data.database.connection);
+            }
         }
-        
-        // Initial load
-        updateTimestamp();
-        updateStats();
-        updateRealtimeData();
-        
-        // Auto-refresh every 15 seconds
-        setInterval(refreshData, 15000);
-    </script>
-</body>
-</html>
+
+        function updatePerformanceTab(data) {
+            if (data.performance) {
+                updateCommandPerformance(data.performance.commands);
+                updateMusicPerformance(data.performance.music);
+            }
+            
+            if (data.errors) {
+                updateErrorLog(data.errors);
+            }
+        }
+
+        function updateTroubleshootingTab(data) {
+            if (data.troubleshooting) {
+                updateDiagnostics(data.troubleshooting);
+                updateRecommendations(data.troubleshooting.recommendations);
+            }
+        }
+
+        function updateProgressBar(type, percent) {
+            const progressElement = document.getElementById(`${type}-progress`);
+            const percentElement = document.getElementById(`${type}-percent`);
+            
+            if (progressElement && percentElement) {
+                progressElement.style.width = `${percent}%`;
+                percentElement.textContent = `${Math.round(percent)}%`;
+                
+                // Color coding
+                if (percent > 80) {
+                    progressElement.style.background = 'linear-gradient(90deg, #f44336, #d32f2f)';
+                } else if (percent > 60) {
+                    progressElement.style.background = 'linear-gradient(90deg, #ff9800, #f57c00)';
+                } else {
+                    progressElement.style.background = 'linear-gradient(90deg, #4CAF50, #45a049)';
+                }
+            }
+        }
+
+        function updateStatusIndicator(troubleshooting) {
+            const indicator = document.getElementById('status-indicator');
+            if (troubleshooting && troubleshooting.system_health) {
+                const health = troubleshooting.system_health;
+                indicator.className = `status-indicator status-${health}`;
+                indicator.textContent = `System ${health.charAt(0).toUpperCase() + health.slice(1)}`;
+            }
+        }
+
+        function updateRecentIssues(issues) {
+            const container = document.getElementById('recent-issues');
+            if (issues.length === 0) {
+                container.innerHTML = '<p style="color: #4CAF50;">No recent issues detected!</p>';
+                return;
+            }
+
+            const issuesHtml = issues.slice(0, 3).map(issue => `
+                <div class="error-item ${issue.type}">
+                    <strong>${issue.title}</strong><br>
+                    <small>${issue.description}</small>
+                </div>
+            `).join('');
+            
+            container.innerHTML = issuesHtml;
+        }
+
+        function updateDiscordConnection(bot) {
+            if (!bot) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Bot User</span>
+                    <span class="metric-value">${bot.username}#${bot.discriminator}</span>
+                </div>
+                <div class="metric">
+                    <span>Bot ID</span>
+                    <span class="metric-value">${bot.id}</span>
+                </div>
+                <div class="metric">
+                    <span>Status</span>
+                    <span class="metric-value">${bot.is_ready ? '🟢 Ready' : '🔴 Not Ready'}</span>
+                </div>
+                <div class="metric">
+                    <span>Connection</span>
+                    <span class="metric-value">${bot.is_closed ? '🔴 Closed' : '🟢 Open'}</span>
+                </div>
+                <div class="metric">
+                    <span>Latency</span>
+                    <span class="metric-value">${Math.round(bot.latency)}ms</span>
+                </div>
+            `;
+            
+            document.getElementById('discord-connection-info').innerHTML = html;
+        }
+
+        function updateGuildList(guilds) {
+            if (!guilds) return;
+            
+            const html = guilds.map(guild => `
+                <div class="guild-item ${guild.voice_connection.connected ? 'voice-connected' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>${guild.name}</strong>
+                            <br>
+                            <small>👥 ${guild.member_count} members | 🎵 ${guild.music.queue_length} queued</small>
+                        </div>
+                        <div style="text-align: right;">
+                            ${guild.voice_connection.connected ? 
+                                `<span style="color: #4CAF50;">🔊 ${guild.voice_connection.channel}</span>` : 
+                                '<span style="color: #999;">No voice connection</span>'
+                            }
+                            <br>
+                            <small>Loop: ${guild.music.loop_state}</small>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('guild-list').innerHTML = html;
+        }
+
+        function updateSystemInfo(system) {
+            if (!system) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>CPU Cores</span>
+                    <span class="metric-value">${system.cpu_count}</span>
+                </div>
+                <div class="metric">
+                    <span>Total Memory</span>
+                    <span class="metric-value">${formatBytes(system.memory.total)}</span>
+                </div>
+                <div class="metric">
+                    <span>Available Memory</span>
+                    <span class="metric-value">${formatBytes(system.memory.available)}</span>
+                </div>
+                <div class="metric">
+                    <span>Total Disk</span>
+                    <span class="metric-value">${formatBytes(system.disk.total)}</span>
+                </div>
+                <div class="metric">
+                    <span>Free Disk</span>
+                    <span class="metric-value">${formatBytes(system.disk.free)}</span>
+                </div>
+            `;
+            
+            document.getElementById('system-info').innerHTML = html;
+        }
+
+        function updateProcessInfo(process) {
+            if (!process) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Process Memory</span>
+                    <span class="metric-value">${formatBytes(process.memory.rss)}</span>
+                </div>
+                <div class="metric">
+                    <span>Memory %</span>
+                    <span class="metric-value">${process.memory.percent.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span>CPU %</span>
+                    <span class="metric-value">${process.cpu_percent.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span>Threads</span>
+                    <span class="metric-value">${process.num_threads}</span>
+                </div>
+                <div class="metric">
+                    <span>Started</span>
+                    <span class="metric-value">${new Date(process.create_time * 1000).toLocaleString()}</span>
+                </div>
+            `;
+            
+            document.getElementById('process-info').innerHTML = html;
+        }
+
+        function updateDatabaseStats(database) {
+            if (!database.tables) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Guilds</span>
+                    <span class="metric-value">${database.tables.guilds}</span>
+                </div>
+                <div class="metric">
+                    <span>Users</span>
+                    <span class="metric-value">${database.tables.users}</span>
+                </div>
+                <div class="metric">
+                    <span>Playlists</span>
+                    <span class="metric-value">${database.tables.playlists}</span>
+                </div>
+                <div class="metric">
+                    <span>Songs</span>
+                    <span class="metric-value">${database.tables.songs}</span>
+                </div>
+                <div class="metric">
+                    <span>Usage Logs</span>
+                    <span class="metric-value">${database.tables.usage_logs}</span>
+                </div>
+                <div class="metric">
+                    <span>Activity (24h)</span>
+                    <span class="metric-value">${database.activity.recent_usage_24h}</span>
+                </div>
+            `;
+            
+            document.getElementById('database-stats').innerHTML = html;
+        }
+
+        function updateDatabaseConnection(connection) {
+            if (!connection) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Database URL</span>
+                    <span class="metric-value">${connection.database_url}</span>
+                </div>
+                <div class="metric">
+                    <span>Version</span>
+                    <span class="metric-value">${connection.version}</span>
+                </div>
+                ${connection.pool_info ? Object.entries(connection.pool_info).map(([key, value]) => `
+                    <div class="metric">
+                        <span>${key.replace('_', ' ')}</span>
+                        <span class="metric-value">${value}</span>
+                    </div>
+                `).join('') : ''}
+            `;
+            
+            document.getElementById('database-connection').innerHTML = html;
+        }
+
+        function updateCommandPerformance(commands) {
+            if (!commands) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Commands (24h)</span>
+                    <span class="metric-value">${commands.total_24h}</span>
+                </div>
+                <div class="metric">
+                    <span>Success Rate</span>
+                    <span class="metric-value">${commands.success_rate.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span>Avg Execution</span>
+                    <span class="metric-value">${commands.avg_execution_time.toFixed(0)}ms</span>
+                </div>
+            `;
+            
+            document.getElementById('command-performance').innerHTML = html;
+        }
+
+        function updateMusicPerformance(music) {
+            if (!music) return;
+            
+            const html = `
+                <div class="metric">
+                    <span>Songs Played</span>
+                    <span class="metric-value">${music.songs_played || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Total Playtime</span>
+                    <span class="metric-value">${formatDuration(music.total_playtime || 0)}</span>
+                </div>
+                <div class="metric">
+                    <span>Queue Adds</span>
+                    <span class="metric-value">${music.queue_adds || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Errors</span>
+                    <span class="metric-value">${music.errors || 0}</span>
+                </div>
+            `;
+            
+            document.getElementById('music-performance').innerHTML = html;
+        }
+
+        function updateErrorLog(errors) {
+            if (!errors.recent_errors) return;
+            
+            const html = errors.recent_errors.length === 0 
+                ? '<p style="color: #4CAF50;">No recent errors! 🎉</p>'
+                : errors.recent_errors.slice(0, 10).map(error => `
+                    <div class="error-item">
+                        <strong>${error.error_type}</strong> - ${error.command || 'Unknown'}<br>
+                        <small>${error.error_message}</small><br>
+                        <small style="opacity: 0.7;">${new Date(error.timestamp).toLocaleString()}</small>
+                    </div>
+                `).join('');
+            
+            document.getElementById('error-log').innerHTML = html;
+        }
+
+        function updateDiagnostics(troubleshooting) {
+            const issues = troubleshooting.issues || [];
+            const html = issues.length === 0 
+                ? '<div class="recommendation">✅ All systems operating normally!</div>'
+                : issues.map(issue => `
+                    <div class="error-item issue-${issue.type}">
+                        <strong><i class="fas fa-${issue.type === 'critical' ? 'exclamation-circle' : 'exclamation-triangle'}"></i> ${issue.title}</strong><br>
+                        <p>${issue.description}</p>
+                        <small><strong>Recommendation:</strong> ${issue.recommendation}</small>
+                    </div>
+                `).join('');
+            
+            document.getElementById('diagnostics-info').innerHTML = html;
+        }
+
+        function updateRecommendations(recommendations) {
+            if (!recommendations) return;
+            
+            const html = recommendations.map(rec => `
+                <div class="recommendation">
+                    <i class="fas fa-lightbulb"></i> ${rec}
+                </div>
+            `).join('');
+            
+            document.getElementById('recommendations').innerHTML = html;
+        }
+
+        function updateCharts(data) {
+            // Update resource chart
+            if (data.system && data.system.system) {
+                updateResourceChart(data.system.system);
+            }
+            
+            // Update database chart
+            if (data.database && data.database.tables) {
+                updateDatabaseChart(data.database.tables);
+            }
+            
+            // Update command chart
+            if (data.performance && data.performance.commands && data.performance.commands.popular_commands) {
+                updateCommandChart(data.performance.commands.popular_commands);
+            }
+        }
+
+        function updateResourceChart(system) {
+            const now = new Date();
+            resourceData.labels.push(now.toLocaleTimeString());
+            resourceData.cpu.push(system.cpu_percent);
+            resourceData.memory.push(system.memory.percent);
+            
+            // Keep only last 20 data points
+            if (resourceData.labels.length > 20) {
+                resourceData.labels.shift();
+                resourceData.cpu.shift();
+                resourceData.memory.shift();
+            }
+            
+            if (!charts.resource) {
+                const ctx = document.getElementById('resourceChart').getContext('2d');
+                charts.resource = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: resourceData.labels,
+                        datasets: [{
+                            label: 'CPU %',
+                            data: resourceData.cpu,
+                            borderColor: '#4CAF50',
+                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            tension: 0.4
+                        }, {
+                            label: 'Memory %',
+                            data: resourceData.memory,
+                            borderColor: '#2196F3',
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: 'white' }
+                            }
+                        },
+                        scales: {
+                            x: { 
+                                ticks: { color: 'white' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            y: { 
+                                ticks: { color: 'white' },
+                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            } else {
+                charts.resource.data.labels = resourceData.labels;
+                charts.resource.data.datasets[0].data = resourceData.cpu;
+                charts.resource.data.datasets[1].data = resourceData.memory;
+                charts.resource.update('none');
+            }
+        }
+
+        function updateDatabaseChart(tables) {
+            if (!charts.database) {
+                const ctx = document.getElementById('databaseChart').getContext('2d');
+                charts.database = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(tables),
+                        datasets: [{
+                            data: Object.values(tables),
+                            backgroundColor: [
+                                '#4CAF50',
+                                '#2196F3',
+                                '#FF9800',
+                                '#9C27B0',
+                                '#F44336'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: 'white' }
+                            }
+                        }
+                    }
+                });
+            } else {
+                                charts.database.data.labels = Object.keys(tables);
+                                charts.database.data.datasets[0].data = Object.values(tables);
+                                charts.database.update('none');
+                            }
+                        }
+                
+                        function updateCommandChart(popularCommands) {
+                            if (!charts.command) {
+                                const ctx = document.getElementById('commandChart').getContext('2d');
+                                charts.command = new Chart(ctx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: popularCommands.map(cmd => cmd.name),
+                                        datasets: [{
+                                            label: 'Usage (24h)',
+                                            data: popularCommands.map(cmd => cmd.count),
+                                            backgroundColor: '#4CAF50'
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false }
+                                        },
+                                        scales: {
+                                            x: {
+                                                ticks: { color: 'white' },
+                                                grid: { color: 'rgba(255,255,255,0.1)' }
+                                            },
+                                            y: {
+                                                ticks: { color: 'white' },
+                                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                                beginAtZero: true
+                                            }
+                                        }
+                                    }
+                                });
+                            } else {
+                                charts.command.data.labels = popularCommands.map(cmd => cmd.name);
+                                charts.command.data.datasets[0].data = popularCommands.map(cmd => cmd.count);
+                                charts.command.update('none');
+                            }
+                        }
+                
+                        // Utility functions
+                        function formatUptime(seconds) {
+                            if (!seconds) return '0s';
+                            const d = Math.floor(seconds / (3600*24));
+                            const h = Math.floor((seconds % (3600*24)) / 3600);
+                            const m = Math.floor((seconds % 3600) / 60);
+                            const s = Math.floor(seconds % 60);
+                            return [
+                                d > 0 ? d + 'd' : '',
+                                h > 0 ? h + 'h' : '',
+                                m > 0 ? m + 'm' : '',
+                                s + 's'
+                            ].filter(Boolean).join(' ');
+                        }
+                
+                        function formatBytes(bytes) {
+                            if (bytes === 0) return '0 B';
+                            const k = 1024;
+                            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                            const i = Math.floor(Math.log(bytes) / Math.log(k));
+                            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                        }
+                
+                        function formatDuration(seconds) {
+                            if (!seconds) return '0s';
+                            const h = Math.floor(seconds / 3600);
+                            const m = Math.floor((seconds % 3600) / 60);
+                            const s = Math.floor(seconds % 60);
+                            return [
+                                h > 0 ? h + 'h' : '',
+                                m > 0 ? m + 'm' : '',
+                                s + 's'
+                            ].filter(Boolean).join(' ');
+                        }
+                
+                        // Tab switching logic
+                        function showTab(tabId) {
+                            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+                            document.getElementById(tabId).classList.add('active');
+                        }
+                
+                        // Initialize everything
+                        window.onload = function() {
+                            initWebSocket();
+                        };
+                    </script>
+                </body>
+                </html>

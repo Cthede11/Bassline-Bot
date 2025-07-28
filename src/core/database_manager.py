@@ -293,6 +293,8 @@ class DatabaseManager:
         ).limit(limit).all()
         
         return [playlist for playlist, song_count in result]
+    
+    
 
 # Global database manager instance
 db_manager = DatabaseManager()

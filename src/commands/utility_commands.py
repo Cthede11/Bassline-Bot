@@ -72,6 +72,38 @@ class UtilityCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error in ping command: {e}")
             await interaction.followup.send("❌ Failed to check latency.", ephemeral=True)
+
+    @app_commands.command(name="status", description="Check voice connection status")
+    async def voice_status(self, interaction: discord.Interaction):
+        """Show current voice connection status and peak hour information."""
+        from src.utils.non_disruptive_voice import voice_manager
+        
+        guild_id = interaction.guild.id
+        status = voice_manager.get_connection_status(guild_id)
+        
+        embed = discord.Embed(title="🎵 Voice Connection Status", color=discord.Color.blue())
+        
+        if interaction.guild.voice_client and interaction.guild.voice_client.is_connected():
+            embed.add_field(name="Status", value="🟢 Connected", inline=True)
+            embed.add_field(name="Channel", value=interaction.guild.voice_client.channel.mention, inline=True)
+        elif status['status'] == 'queued':
+            embed.add_field(name="Status", value="🟡 Queued (Peak Hours)", inline=True)
+            embed.add_field(name="Position", value=f"Attempt {status['attempts']}/20", inline=True)
+            embed.add_field(name="Est. Wait", value=status['estimated_wait'], inline=True)
+        else:
+            embed.add_field(name="Status", value="🔴 Disconnected", inline=True)
+        
+        # Add peak hour information
+        import datetime
+        current_hour = datetime.datetime.now().hour
+        if 12 <= current_hour <= 20:
+            embed.add_field(
+                name="ℹ️ Peak Hours Notice", 
+                value="Discord voice servers are experiencing high load. Connection may take longer than usual.",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed)
     
     @app_commands.command(name="info", description="Show bot information")
     async def info(self, interaction: discord.Interaction):
@@ -221,9 +253,13 @@ class UtilityCommands(commands.Cog):
             # Playlist commands
             playlist_commands = [
                 "`/setupplaylists` - Setup playlist category (Admin)",
-                "`/createplaylist <name>` - Create playlist (Admin)",
-                "`/playlist <name>` - Play a playlist",
-                "`/listplaylists` - List all playlists"
+                "`/createplaylist <n>` - Create playlist (Admin)",
+                "`/listplaylists` - List all server playlists",
+                "`/myplaylists` - View your personal playlists",
+                "`/addtoplaylist <playlist> [song]` - Add song to playlist",
+                "`/playplaylist <n>` - Play all songs from a playlist",
+                "`/playlistinfo <n>` - Show detailed playlist information",
+                "`/deleteplaylist <n>` - Delete your playlist"
             ]
             
             embed.add_field(

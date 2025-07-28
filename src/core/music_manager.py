@@ -110,11 +110,17 @@ class MusicManager:
         return self.queues.get(guild_id, [])
     
     def get_next_track(self, guild_id: int) -> Optional[Track]:
-        """Get the next track from the queue."""
+        """Get the next track from the queue without removing it."""
+        queue = self.queues.get(guild_id, [])
+        return queue[0] if queue else None
+    
+    def pop_next_track(self, guild_id: int) -> Optional[Track]:
+        """Remove and return the next track from the queue."""
         queue = self.queues.get(guild_id, [])
         if queue:
+            track = queue.pop(0)
             self.update_last_activity(guild_id)
-            return queue.pop(0)
+            return track
         return None
     
     def shuffle_queue(self, guild_id: int):

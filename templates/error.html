@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Error</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        
+        .error-container {
+            text-align: center;
+            max-width: 600px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .error-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            color: #f44336;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .error-message {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            background: rgba(244, 67, 54, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #f44336;
+        }
+        
+        .retry-button {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin: 10px;
+        }
+        
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .back-button {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+        }
+        
+        .back-button:hover {
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+        }
+        
+        .error-details {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            text-align: left;
+        }
+        
+        .error-details pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">⚠️</div>
+        <h1>Dashboard Error</h1>
+        
+        <div class="error-message">
+            <strong>Something went wrong:</strong><br>
+            {{ error }}
+        </div>
+        
+        <div>
+            <a href="/" class="retry-button">🔄 Retry Dashboard</a>
+            <a href="/health" class="retry-button back-button">🏥 Health Check</a>
+        </div>
+        
+        <div class="error-details">
+            <strong>Troubleshooting Tips:</strong>
+            <ul style="text-align: left; margin-top: 15px;">
+                <li>Check if the bot is running and connected to Discord</li>
+                <li>Verify database connectivity</li>
+                <li>Check system resources (CPU, memory, disk space)</li>
+                <li>Review bot logs for detailed error information</li>
+                <li>Try refreshing the page in a few seconds</li>
+            </ul>
+        </div>
+        
+        <div style="margin-top: 30px; opacity: 0.7; font-size: 0.9em;">
+            <p>If the problem persists, check the bot logs or contact your administrator.</p>
+            <p>Current time: <span id="current-time"></span></p>
+        </div>
+    </div>
+    
+    <script>
+        // Update current time
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleString();
+        }
+        
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Auto-retry after 10 seconds
+        setTimeout(() => {
+            if (confirm('Would you like to automatically retry loading the dashboard?')) {
+                window.location.href = '/';
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

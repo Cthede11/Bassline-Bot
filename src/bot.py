@@ -24,7 +24,11 @@ from src.commands.playlist_commands import PlaylistCommands
 from src.commands.admin_commands import AdminCommands
 from src.commands.utility_commands import UtilityCommands
 
-class BasslineBotPro(commands.Bot):
+# Import monitoring
+from src.monitoring.health import get_health_monitor
+from src.web.dashboard import start_dashboard
+
+class BasslineBot(commands.Bot):
     """Enhanced Discord music bot with professional features."""
     
     def __init__(self):
@@ -34,6 +38,11 @@ class BasslineBotPro(commands.Bot):
         intents.guilds = True
         intents.voice_states = True
         intents.guild_messages = True
+        
+        # Initialize startup time and error tracking BEFORE super().__init__
+        self.startup_time = time.time()
+        self.error_count = 0
+        self.recent_errors = []
         
         super().__init__(
             command_prefix=self._get_prefix,
@@ -46,9 +55,8 @@ class BasslineBotPro(commands.Bot):
             )
         )
         
-        # Initialize components
+        # Initialize error handler AFTER super().__init__
         self.error_handler = ErrorHandler(self)
-        self.startup_time = None
         self.ready_guilds = set()
         
         logger.info(f"Initializing {settings.bot_name}")
@@ -66,6 +74,7 @@ class BasslineBotPro(commands.Bot):
     
     async def setup_hook(self):
         """Set up the bot."""
+        logger.info("Setting up bot...")
         try:
             # Initialize database
             init_db()
@@ -82,6 +91,12 @@ class BasslineBotPro(commands.Bot):
             self.cleanup_task.start()
             if settings.metrics_enabled:
                 self.metrics_task.start()
+            
+            # Initialize health monitoring
+            health_monitor = get_health_monitor(self)
+            if health_monitor and settings.health_check_enabled:
+                logger.info("Starting health monitoring...")
+                asyncio.create_task(health_monitor.start_monitoring())
             
             logger.info("Bot setup completed successfully")
             
@@ -109,9 +124,8 @@ class BasslineBotPro(commands.Bot):
     
     async def on_ready(self):
         """Called when bot is ready."""
-        if not self.startup_time:
-            import time
-            self.startup_time = time.time()
+        if not hasattr(self, '_ready_called'):
+            self._ready_called = True
             
             logger.info(f"[SUCCESS] {self.user.name} is online!")
             logger.info(f"[STATS] Connected to {len(self.guilds)} guilds")
@@ -177,46 +191,89 @@ class BasslineBotPro(commands.Bot):
     
     async def on_command_error(self, ctx: commands.Context, error: Exception):
         """Handle command errors."""
+        self.error_count += 1
+        error_info = {
+            'timestamp': time.time(),
+            'error_type': type(error).__name__,
+            'error_message': str(error),
+            'command': ctx.command.name if ctx.command else 'Unknown',
+            'guild_id': ctx.guild.id if ctx.guild else None,
+            'user_id': ctx.author.id,
+            'traceback': traceback.format_exc()
+        }
+        
+        self.recent_errors.append(error_info)
+        # Keep only last 100 errors
+        if len(self.recent_errors) > 100:
+            self.recent_errors.pop(0)
+        
+        # Log to database if possible
+        if error_info['guild_id']:
+            try:
+                db_manager.log_command_usage(
+                    guild_id=error_info['guild_id'],
+                    user_id=error_info['user_id'],
+                    command_name=error_info['command'],
+                    success=False,
+                    error_message=error_info['error_message']
+                )
+            except Exception as db_error:
+                logger.error(f"Failed to log error to database: {db_error}")
+        
+        # Use error handler
         await self.error_handler.handle_command_error(ctx, error)
     
     async def on_app_command_error(self, interaction: discord.Interaction, error: Exception):
         """Handle slash command errors."""
+        self.error_count += 1
+        error_info = {
+            'timestamp': time.time(),
+            'error_type': type(error).__name__,
+            'error_message': str(error),
+            'command': interaction.command.name if interaction.command else 'Unknown',
+            'guild_id': interaction.guild.id if interaction.guild else None,
+            'user_id': interaction.user.id,
+            'traceback': traceback.format_exc()
+        }
+        
+        self.recent_errors.append(error_info)
+        if len(self.recent_errors) > 100:
+            self.recent_errors.pop(0)
+        
+        # Log to database
+        if error_info['guild_id']:
+            try:
+                db_manager.log_command_usage(
+                    guild_id=error_info['guild_id'],
+                    user_id=error_info['user_id'],
+                    command_name=error_info['command'],
+                    success=False,
+                    error_message=error_info['error_message']
+                )
+            except Exception as db_error:
+                logger.error(f"Failed to log error to database: {db_error}")
+        
+        # Use error handler
         await self.error_handler.handle_interaction_error(interaction, error)
     
     async def start_dashboard(self):
-            """Start the web dashboard."""
-            if not settings.dashboard_enabled:
-                return
+        """Start the web dashboard."""
+        if not settings.dashboard_enabled:
+            return
+        
+        try:
+            logger.info(f"Starting dashboard on {settings.dashboard_host}:{settings.dashboard_port}")
             
-            try:
-                import uvicorn
-                from src.web.dashboard import app
-                
-                # Run dashboard in a separate thread to avoid blocking the bot
-                config = uvicorn.Config(
-                    app,
-                    host=settings.dashboard_host,
-                    port=settings.dashboard_port,
-                    log_level="warning",  # Reduce log noise
-                    access_log=False
-                )
-                server = uvicorn.Server(config)
-                
-                # Start in background thread
-                import threading
-                def run_dashboard():
-                    import asyncio
-                    asyncio.run(server.serve())
-                
-                dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
-                dashboard_thread.start()
-                
-                logger.info(f"Dashboard started on {settings.dashboard_host}:{settings.dashboard_port}")
-                
-            except ImportError:
-                logger.warning("Dashboard dependencies not installed")
-            except Exception as e:
-                logger.error(f"Failed to start dashboard: {e}")
+            # Start dashboard using the comprehensive implementation
+            asyncio.create_task(start_dashboard(self))
+            
+            logger.info(f"Dashboard available at http://{settings.dashboard_host}:{settings.dashboard_port}")
+            
+        except ImportError:
+            logger.warning("Dashboard dependencies not installed")
+        except Exception as e:
+            logger.error(f"Failed to start dashboard: {e}")
+            traceback.print_exc()
     
     @tasks.loop(minutes=30)
     async def cleanup_task(self):
@@ -243,8 +300,11 @@ class BasslineBotPro(commands.Bot):
                 music_manager.clear_guild_state(guild_id)
             
             # Clean up old downloads
-            from src.utils.youtube import youtube_manager
-            youtube_manager.cleanup_old_downloads()
+            try:
+                from src.utils.youtube import youtube_manager
+                youtube_manager.cleanup_old_downloads()
+            except ImportError:
+                pass  # youtube_manager might not exist yet
             
             logger.debug("Cleanup task completed")
             
@@ -256,8 +316,11 @@ class BasslineBotPro(commands.Bot):
         """Collect metrics."""
         try:
             if settings.metrics_enabled:
-                from src.monitoring.metrics import collect_metrics
-                await collect_metrics(self)
+                try:
+                    from src.monitoring.metrics import collect_metrics
+                    await collect_metrics(self)
+                except ImportError:
+                    logger.debug("Metrics module not available")
         except Exception as e:
             logger.error(f"Error collecting metrics: {e}")
     
@@ -273,13 +336,18 @@ async def main():
     Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)
     Path("downloads").mkdir(exist_ok=True)
+    Path("static").mkdir(exist_ok=True)
+    Path("templates").mkdir(exist_ok=True)
     
     # Create bot instance
-    bot = BasslineBotPro()
+    bot = BasslineBot()
     
     try:
+        logger.info("Starting Bassline-Bot with comprehensive monitoring...")
+        
         # Start the bot
         await bot.start(settings.discord_token)
+        
     except discord.LoginFailure:
         logger.error("Invalid Discord token provided")
         sys.exit(1)
@@ -292,6 +360,11 @@ async def main():
     finally:
         if not bot.is_closed():
             await bot.close()
+        
+        # Stop health monitoring
+        health_monitor = get_health_monitor()
+        if health_monitor:
+            logger.info("Stopping health monitoring...")
 
 if __name__ == "__main__":
     try:
