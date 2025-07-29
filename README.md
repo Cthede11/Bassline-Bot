@@ -5,7 +5,7 @@ A Discord music bot that plays high-quality audio and manages playlists for your
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.3.2+-blue.svg)](https://discordpy.readthedocs.io/)
-[![Docker](https://img.shields.io/badge/docker-ready-green.svg)](docker-compose.yml) (Optional)
+[![Docker](https://img.shields.io/badge/docker-ready-green.svg)](docker-compose.yml)
 
 BasslineBot brings music to your Discord server with features like playlist management, queue controls, and a web dashboard to monitor everything. It's built with Python and designed to be reliable and easy to use.
 
