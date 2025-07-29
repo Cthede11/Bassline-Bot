@@ -32,7 +32,7 @@ class MusicCommands(commands.Cog):
     @app_commands.command(name="play", description="Play a song from YouTube")
     @app_commands.describe(query="Song name or YouTube URL")
     async def play(self, interaction: discord.Interaction, query: str):
-        """Enhanced play command with database integration."""
+        """Enhanced play command with database-first architecture."""
         timer = Timer().start()
         
         try:
@@ -47,6 +47,11 @@ class MusicCommands(commands.Cog):
             guild_id = interaction.guild.id
             user = interaction.user
             
+            # AUTO-CREATE Guild and User records (this was missing!)
+            with db_manager:
+                db_manager.get_or_create_guild(guild_id, interaction.guild.name)
+                db_manager.get_or_create_user(user.id, user.display_name)
+            
             # Ensure user is in voice channel
             if not user.voice or not user.voice.channel:
                 await interaction.followup.send("❌ You must be in a voice channel to play music.", ephemeral=True)
@@ -59,14 +64,18 @@ class MusicCommands(commands.Cog):
             
             music_manager.voice_clients[guild_id] = vc
             
-            # Get video information with database integration
+            # USE NEW DATABASE-FIRST METHOD
             try:
-                video_info = await youtube_manager.get_info(query, download=settings.download_enabled)
+                # Check if the new method exists, fallback to old if not implemented yet
+                if hasattr(youtube_manager, 'get_info_with_database'):
+                    video_info = await youtube_manager.get_info_with_database(query, requested_by=user.id)
+                else:
+                    video_info = await youtube_manager.get_info(query, download=settings.download_enabled)
             except YouTubeError as e:
                 await interaction.followup.send(f"❌ {str(e)}", ephemeral=True)
                 return
             
-            # Create track object with enhanced info
+            # Create track object
             track = Track(
                 query=query,
                 title=video_info['title'],
@@ -77,37 +86,30 @@ class MusicCommands(commands.Cog):
                 requested_by=user
             )
             
-            # Add local path info if available
-            if video_info.get('local_path'):
-                track.local_path = video_info['local_path']
-                track.file_size = video_info.get('file_size')
-            
             # Check if currently playing
             if music_manager.is_playing(guild_id):
                 # Add to queue
                 success = await music_manager.add_to_queue(guild_id, track)
                 if success:
-                    # Create enhanced embed with download status
+                    # ENHANCED EMBED with cache status
                     embed = discord.Embed(
                         title="✅ Added to Queue",
                         description=f"**{track.title}**\nDuration: {format_duration(track.duration)}",
                         color=discord.Color.green()
                     )
                     
-                    # Show download status
-                    if video_info.get('local_path'):
-                        embed.add_field(
-                            name="📁 File Status", 
-                            value="Downloaded (faster playback)", 
-                            inline=True
-                        )
+                    # Show cache status and popularity
+                    if video_info.get('is_downloaded', False):
+                        file_size_mb = round((video_info.get('file_size', 0)) / (1024 * 1024), 2)
+                        status_text = f"🚀 Cached ({file_size_mb} MB)"
+                        if video_info.get('play_count', 0) > 1:
+                            status_text += f" • Played {video_info['play_count']} times"
                     else:
-                        embed.add_field(
-                            name="🌐 File Status", 
-                            value="Streaming", 
-                            inline=True
-                        )
+                        status_text = "🌐 Streaming"
+                        if settings.download_enabled:
+                            status_text += " (caching for next time)"
                     
+                    embed.add_field(name="Status", value=status_text, inline=True)
                     embed.set_footer(text=f"Position in queue: {len(music_manager.get_queue(guild_id))}")
                     
                     if track.thumbnail:
@@ -120,14 +122,13 @@ class MusicCommands(commands.Cog):
                 # Add to queue first, then start playing
                 success = await music_manager.add_to_queue(guild_id, track)
                 if success:
-                    # Get the track we just added and start playing
                     first_track = music_manager.pop_next_track(guild_id)
                     if first_track:
                         await self._play_track(interaction, vc, first_track, video_info)
                 else:
                     await interaction.followup.send("❌ Queue is full.", ephemeral=True)
             
-            # Log usage
+            # Log usage (this creates Usage records)
             timer.stop()
             with db_manager:
                 db_manager.log_command_usage(
@@ -139,7 +140,7 @@ class MusicCommands(commands.Cog):
                 )
         
         except Exception as e:
-            logger.error(f"Error in play command: {e}", exc_info=True)
+            logger.error(f"Error in enhanced play command: {e}", exc_info=True)
             timer.stop()
             
             try:
@@ -168,44 +169,70 @@ class MusicCommands(commands.Cog):
             bass_boost = music_manager.get_bass_boost(track.requested_by.id)
             volume = music_manager.get_user_volume(track.requested_by.id)
             
-            # Create audio source with enhanced info
-            audio_source = await self._create_audio_source(track, video_info, bass_boost, volume)
+            # Create audio source
+            audio_source = await create_audio_source(track, bass_boost=bass_boost, volume=volume)
             
             # Set now playing
             music_manager.set_now_playing(interaction.guild.id, track, voice_client)
             
-            # Play audio with enhanced callback
-            voice_client.play(audio_source, after=lambda e: self._handle_playback_finished(interaction.guild.id, track, e))
+            # Play audio
+            voice_client.play(audio_source, after=lambda e: self._handle_playback_finished(interaction.guild.id, e))
             
-            # Send enhanced now playing embed
-            await self._send_now_playing_embed(interaction, track, video_info)
+            # ENHANCED now playing embed
+            embed = discord.Embed(
+                title="🎶 Now Playing",
+                description=f"**{track.title}**",
+                color=discord.Color.blue()
+            )
             
-            # Record play in database if song exists
-            try:
-                existing_song = db_manager.get_song_by_url(track.url)
-                if existing_song:
-                    db_manager.record_song_play(existing_song.id)
-            except Exception as db_error:
-                logger.error(f"Error recording song play: {db_error}")
+            embed.add_field(name="Duration", value=format_duration(track.duration), inline=True)
+            embed.add_field(name="Requested by", value=track.requested_by.mention, inline=True)
+            embed.add_field(name="Uploader", value=track.uploader, inline=True)
+            
+            # Show cache status
+            if video_info.get('is_downloaded', False):
+                file_size_mb = round((video_info.get('file_size', 0)) / (1024 * 1024), 2)
+                embed.add_field(
+                    name="🚀 Status", 
+                    value=f"Cached ({file_size_mb} MB)", 
+                    inline=True
+                )
+            else:
+                embed.add_field(
+                    name="🌐 Status", 
+                    value="Streaming", 
+                    inline=True
+                )
+            
+            # Show popularity if played before
+            play_count = video_info.get('play_count', 0)
+            if play_count > 1:
+                embed.add_field(
+                    name="📊 Popularity", 
+                    value=f"Played {play_count} times", 
+                    inline=True
+                )
+            
+            if track.thumbnail:
+                embed.set_thumbnail(url=track.thumbnail)
+            
+            embed.set_footer(text=f"Added {format_duration(int(time.time() - track.added_at))} ago")
+            
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed)
+            else:
+                await interaction.response.send_message(embed=embed)
             
             logger.info(f"Started playing: {track.title} in guild {interaction.guild.id}")
-        
+            
         except Exception as e:
-            logger.error(f"Error playing track: {e}", exc_info=True)
+            logger.error(f"Error playing enhanced track: {e}", exc_info=True)
             await interaction.followup.send(f"❌ Error playing track: {str(e)}", ephemeral=True)
     
-    def _handle_playback_finished(self, guild_id: int, track: Track, error):
-        """Enhanced playback finished handler with database integration."""
+    def _handle_playback_finished(self, guild_id: int, error):
+        """Handle when a track finishes playing."""
         if error:
             logger.error(f"Playback error in guild {guild_id}: {error}")
-        
-        # Record successful play completion in database
-        try:
-            existing_song = db_manager.get_song_by_url(track.url)
-            if existing_song and not error:
-                db_manager.record_song_play(existing_song.id)
-        except Exception as db_error:
-            logger.error(f"Error recording completed play: {db_error}")
         
         # Schedule next track using thread-safe method
         asyncio.run_coroutine_threadsafe(

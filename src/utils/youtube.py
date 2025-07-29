@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional
 import yt_dlp
+from datetime import datetime
 
 from config.settings import settings
 from src.utils.helpers import retry
@@ -330,6 +331,89 @@ class YouTubeManager:
         """Clear the cache."""
         self.cache.clear()
         logger.info("YouTube cache cleared")
+
+    async def get_info_with_database(self, url_or_query: str, requested_by: int = None) -> dict:
+        """
+        Enhanced info extraction with database integration.
+        This is the new method that checks database first, then downloads if needed.
+        """
+        try:
+            # Step 1: If it's a URL, check database first
+            if url_or_query.startswith(('http', 'https')):
+                existing_song = db_manager.get_song_by_url(url_or_query)
+                if existing_song:
+                    # Found in database! Update play count and return cached info
+                    existing_song.play_count += 1
+                    existing_song.last_played = datetime.utcnow()
+                    if requested_by:
+                        existing_song.last_requested_by = requested_by
+                    db_manager.session.commit()
+                    
+                    # Convert database song to dict format
+                    result = {
+                        'id': existing_song.url.split('=')[-1] if '=' in existing_song.url else 'unknown',
+                        'title': existing_song.title,
+                        'url': existing_song.url,
+                        'webpage_url': existing_song.url,
+                        'duration': existing_song.duration,
+                        'thumbnail': existing_song.thumbnail,
+                        'uploader': existing_song.uploader,
+                        'play_count': existing_song.play_count,
+                        'is_downloaded': existing_song.is_downloaded,
+                        'local_path': existing_song.local_path,
+                        'file_size': existing_song.file_size,
+                        'downloaded_file': existing_song.local_path if existing_song.is_downloaded else None,
+                        'stream_url': existing_song.local_path if existing_song.is_downloaded else None,
+                        # Legacy fields for compatibility
+                        'description': '',
+                        'view_count': 0,
+                        'formats': []
+                    }
+                    
+                    logger.info(f"Using cached song: {existing_song.title} (played {existing_song.play_count} times)")
+                    return result
+            
+            # Step 2: Not in database, get info from YouTube using existing method
+            logger.info(f"Song not in cache, extracting from YouTube: {url_or_query}")
+            result = await self.get_info(url_or_query, download=settings.download_enabled)
+            
+            # Step 3: Store in database for future use
+            try:
+                song = db_manager.find_or_create_song(
+                    url=result['url'],
+                    title=result['title'],
+                    duration=result.get('duration'),
+                    thumbnail=result.get('thumbnail'),
+                    uploader=result.get('uploader'),
+                    requested_by=requested_by
+                )
+                
+                # If file was downloaded, update database
+                if result.get('downloaded_file') and os.path.exists(result['downloaded_file']):
+                    file_size = os.path.getsize(result['downloaded_file'])
+                    db_manager.update_song_download_status(song.id, result['downloaded_file'], file_size)
+                    result['is_downloaded'] = True
+                    result['local_path'] = result['downloaded_file']
+                    result['file_size'] = file_size
+                    logger.info(f"Stored and downloaded: {song.title}")
+                else:
+                    result['is_downloaded'] = False
+                    result['local_path'] = None
+                    logger.info(f"Stored in database: {song.title}")
+                
+                result['play_count'] = song.play_count
+                result['database_id'] = song.id
+                
+            except Exception as db_error:
+                logger.error(f"❌ Database storage error: {db_error}")
+                # Continue without database - don't break playback
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Enhanced info extraction error: {e}")
+            # Fallback to original method
+            return await self.get_info(url_or_query, download=settings.download_enabled)
     
 
 # Global YouTube manager instance
