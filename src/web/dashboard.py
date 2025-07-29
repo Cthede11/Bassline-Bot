@@ -173,7 +173,7 @@ async def get_system_info():
 
 @app.get("/api/discord")
 async def get_discord_info():
-    """Get Discord connection and guild information."""
+    """Get Discord connection and guild information with correct metrics."""
     try:
         bot = get_bot_instance()
         if not bot:
@@ -184,14 +184,20 @@ async def get_discord_info():
         
         for guild in bot.guilds:
             try:
-                # Get guild-specific stats
+                # Get comprehensive guild-specific stats
                 guild_stats = music_manager.get_guild_stats(guild.id)
                 
                 # Get database info
                 with db_manager:
                     db_guild = db_manager.get_guild_settings(guild.id)
                 
-                voice_client = guild.voice_client
+                # Get recent activity for this guild
+                with db_manager:
+                    recent_usage = db_manager.session.query(Usage).filter(
+                        Usage.guild_id == guild.id,
+                        Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
+                    ).count()
+                
                 guild_info = {
                     "id": str(guild.id),
                     "name": guild.name,
@@ -202,24 +208,30 @@ async def get_discord_info():
                     },
                     "created_at": guild.created_at.isoformat(),
                     "features": guild.features,
-                    "voice_connection": {
-                        "connected": voice_client is not None,
-                        "channel": voice_client.channel.name if voice_client else None,
-                        "latency": voice_client.latency if voice_client else None,
-                        "is_playing": voice_client.is_playing() if voice_client else False,
-                        "is_paused": voice_client.is_paused() if voice_client else False
-                    },
+                    "voice_connection": guild_stats['voice_connection'],
                     "music": {
-                        "queue_length": guild_stats.get('queue_length', 0),
-                        "is_playing": guild_stats.get('is_playing', False),
-                        "loop_state": guild_stats.get('loop_state', 'OFF'),
-                        "last_activity": guild_stats.get('last_activity', 0)
+                        "queue_length": guild_stats['queue_length'],
+                        "queue_duration": guild_stats['queue_duration'],
+                        "queue_duration_formatted": guild_stats['queue_duration_formatted'],
+                        "is_playing": guild_stats['is_playing'],
+                        "is_paused": guild_stats['is_paused'],
+                        "loop_state": guild_stats['loop_state'],
+                        "has_queue": guild_stats['has_queue'],
+                        "current_track": guild_stats['current_track'],
+                        "estimated_finish_time": guild_stats['estimated_finish_time']
                     },
                     "settings": {
                         "max_queue_size": db_guild.max_queue_size if db_guild else settings.max_queue_size,
                         "auto_disconnect_timeout": db_guild.auto_disconnect_timeout if db_guild else settings.idle_timeout,
                         "bass_boost_enabled": db_guild.bass_boost_enabled if db_guild else settings.bass_boost_enabled,
-                        "dj_role_id": db_guild.dj_role_id if db_guild else None
+                        "dj_role_id": str(db_guild.dj_role_id) if db_guild and db_guild.dj_role_id else None,
+                        "prefix": db_guild.prefix if db_guild else settings.bot_prefix
+                    },
+                    "activity": {
+                        "last_activity": guild_stats['last_activity'],
+                        "last_activity_formatted": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(guild_stats['last_activity'])),
+                        "commands_24h": recent_usage,
+                        "minutes_since_activity": (time.time() - guild_stats['last_activity']) / 60
                     }
                 }
                 
@@ -231,26 +243,37 @@ async def get_discord_info():
                 guilds_info.append({
                     "id": str(guild.id),
                     "name": guild.name,
+                    "member_count": guild.member_count or 0,
                     "error": str(e)
                 })
+                total_members += guild.member_count or 0
+        
+        # Get comprehensive music manager metrics
+        music_metrics = music_manager.get_comprehensive_metrics()
         
         return {
             "bot": {
                 "id": str(bot.user.id),
                 "username": bot.user.name,
                 "discriminator": bot.user.discriminator,
+                "avatar_url": str(bot.user.avatar.url) if bot.user.avatar else None,
                 "is_ready": bot.is_ready(),
                 "is_closed": bot.is_closed(),
                 "latency": bot.latency * 1000,  # Convert to ms
-                "uptime": time.time() - getattr(bot, 'startup_time', time.time())
+                "uptime": time.time() - getattr(bot, 'startup_time', time.time()),
+                "shard_count": getattr(bot, 'shard_count', None)
             },
             "guilds": guilds_info,
             "totals": {
                 "guild_count": len(bot.guilds),
                 "total_members": total_members,
-                "active_voice_connections": len(music_manager.voice_clients),
-                "total_queued_tracks": sum(len(queue) for queue in music_manager.queues.values())
-            }
+                "active_voice_connections": music_metrics['active_voice_connections'],
+                "connected_voice_clients": music_metrics['connected_voice_clients'],
+                "total_queued_tracks": music_metrics['total_queued_tracks'],
+                "currently_playing_sessions": music_metrics['currently_playing_sessions'],
+                "non_empty_queues": music_metrics['non_empty_queues']
+            },
+            "music_metrics": music_metrics
         }
     except Exception as e:
         logger.error(f"Discord info error: {e}")
@@ -483,9 +506,63 @@ async def get_troubleshooting_info():
         logger.error(f"Troubleshooting info error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def get_comprehensive_stats():
-    """Get all dashboard statistics."""
+@app.get("/api/music/detailed")
+async def get_detailed_music_info():
+    """Get detailed music system information."""
     try:
+        detailed_info = {}
+        
+        for guild_id in music_manager.voice_clients.keys():
+            guild_stats = music_manager.get_guild_stats(guild_id)
+            queue = music_manager.get_queue(guild_id)
+            
+            # Get guild name
+            bot = get_bot_instance()
+            guild_name = "Unknown"
+            if bot:
+                guild = bot.get_guild(guild_id)
+                if guild:
+                    guild_name = guild.name
+            
+            detailed_info[str(guild_id)] = {
+                "guild_name": guild_name,
+                "stats": guild_stats,
+                "queue_tracks": [
+                    {
+                        "title": track.title,
+                        "duration": track.duration,
+                        "duration_formatted": music_manager._format_duration(track.duration) if track.duration else "Unknown",
+                        "requested_by": track.requested_by.display_name,
+                        "added_at": track.added_at,
+                        "url": track.url,
+                        "thumbnail": track.thumbnail
+                    }
+                    for track in queue[:10]  # Limit to first 10 tracks
+                ],
+                "queue_summary": {
+                    "total_tracks": len(queue),
+                    "showing_tracks": min(len(queue), 10),
+                    "total_duration": sum(track.duration for track in queue if track.duration),
+                    "estimated_finish": time.time() + sum(track.duration for track in queue if track.duration) if queue else None
+                }
+            }
+        
+        return {
+            "detailed_guilds": detailed_info,
+            "summary": music_manager.get_comprehensive_metrics(),
+            "timestamp": time.time()
+        }
+        
+    except Exception as e:
+        logger.error(f"Detailed music info error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def get_comprehensive_stats():
+    """Get all dashboard statistics with corrected metrics."""
+    try:
+        # Get comprehensive music metrics first
+        music_metrics = music_manager.get_comprehensive_metrics()
+        
         # Run all stat gathering concurrently
         system_task = get_system_info()
         discord_task = get_discord_info()
@@ -503,19 +580,87 @@ async def get_comprehensive_stats():
         def safe_result(result, default={}):
             return result if not isinstance(result, Exception) else {"error": str(result), **default}
         
+        # Calculate additional derived metrics
+        bot = get_bot_instance()
+        uptime = time.time() - getattr(bot, 'startup_time', time.time()) if bot else 0
+        
+        # Guild activity analysis
+        active_guilds = music_metrics['active_guilds_1h']
+        total_guilds = discord_info.get('totals', {}).get('guild_count', 0) if not isinstance(discord_info, Exception) else 0
+        activity_rate = (active_guilds / max(1, total_guilds)) * 100
+        
         return {
             "timestamp": datetime.utcnow().isoformat(),
+            "uptime": uptime,
             "system": safe_result(system_info),
             "discord": safe_result(discord_info),
             "database": safe_result(db_info),
             "performance": safe_result(perf_info),
             "errors": safe_result(error_info),
             "troubleshooting": safe_result(troubleshoot_info),
-            "uptime": time.time() - getattr(get_bot_instance(), 'startup_time', time.time()) if get_bot_instance() else 0
+            "music_comprehensive": music_metrics,
+            "derived_metrics": {
+                "guild_activity_rate": activity_rate,
+                "avg_members_per_guild": (discord_info.get('totals', {}).get('total_members', 0) / max(1, total_guilds)) if not isinstance(discord_info, Exception) else 0,
+                "voice_connection_rate": (music_metrics['connected_voice_clients'] / max(1, total_guilds)) * 100,
+                "music_engagement_rate": (music_metrics['currently_playing_sessions'] / max(1, total_guilds)) * 100,
+                "avg_queue_efficiency": music_metrics['avg_queue_size'],
+                "system_health_score": calculate_health_score(system_info, discord_info, music_metrics)
+            }
         }
     except Exception as e:
         logger.error(f"Comprehensive stats error: {e}")
         return {"error": str(e), "timestamp": datetime.utcnow().isoformat()}
+
+def calculate_health_score(system_info, discord_info, music_metrics):
+    """Calculate an overall system health score (0-100)."""
+    try:
+        score = 100
+        
+        # System resource penalties
+        if not isinstance(system_info, Exception) and 'system' in system_info:
+            cpu_percent = system_info['system'].get('cpu_percent', 0)
+            memory_percent = system_info['system'].get('memory', {}).get('percent', 0)
+            
+            if cpu_percent > 80:
+                score -= 20
+            elif cpu_percent > 60:
+                score -= 10
+                
+            if memory_percent > 85:
+                score -= 20
+            elif memory_percent > 70:
+                score -= 10
+        
+        # Discord connection penalties
+        if not isinstance(discord_info, Exception) and 'bot' in discord_info:
+            if not discord_info['bot'].get('is_ready', False):
+                score -= 30
+            if discord_info['bot'].get('latency', 0) > 500:  # 500ms
+                score -= 15
+            elif discord_info['bot'].get('latency', 0) > 200:  # 200ms
+                score -= 5
+        
+        # Music system penalties
+        connection_rate = music_metrics.get('connection_success_rate', 100)
+        if connection_rate < 90:
+            score -= 15
+        elif connection_rate < 95:
+            score -= 5
+        
+        # Error rate penalties
+        total_operations = music_metrics.get('songs_played_total', 0) + music_metrics.get('queue_adds_total', 0)
+        if total_operations > 0:
+            error_rate = (music_metrics.get('errors_total', 0) / total_operations) * 100
+            if error_rate > 10:
+                score -= 20
+            elif error_rate > 5:
+                score -= 10
+        
+        return max(0, min(100, score))
+        
+    except Exception:
+        return 50  # Default neutral score on calculation error
 
 async def basic_health_check():
     """Basic health check when health monitor is not available."""

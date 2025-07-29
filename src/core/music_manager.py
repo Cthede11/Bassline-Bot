@@ -119,6 +119,7 @@ class MusicManager:
         queue = self.queues.get(guild_id, [])
         if queue:
             track = queue.pop(0)
+            logger.debug(f"Popped track from queue: {track.title} in guild {guild_id}")
             self.update_last_activity(guild_id)
             return track
         return None
@@ -248,13 +249,148 @@ class MusicManager:
         return self.metrics.copy()
     
     def get_guild_stats(self, guild_id: int) -> dict:
-        """Get statistics for a specific guild."""
+        """Get comprehensive statistics for a specific guild."""
+        now_playing = self.get_now_playing(guild_id)
+        queue = self.get_queue(guild_id)
+        voice_client = self.voice_clients.get(guild_id)
+        
+        # Calculate queue duration
+        queue_duration = sum(track.duration for track in queue if track.duration)
+        
+        # Get currently playing track info
+        current_track_info = None
+        if now_playing:
+            elapsed_time = time.time() - now_playing.start_time
+            current_track_info = {
+                'title': now_playing.track.title,
+                'duration': now_playing.track.duration,
+                'elapsed': elapsed_time,
+                'remaining': (now_playing.track.duration - elapsed_time) if now_playing.track.duration else None,
+                'progress_percent': (elapsed_time / now_playing.track.duration * 100) if now_playing.track.duration else 0,
+                'requested_by': now_playing.track.requested_by.display_name,
+                'thumbnail': now_playing.track.thumbnail,
+                'url': now_playing.track.url
+            }
+        
+        # Voice connection status
+        voice_status = {
+            'connected': voice_client is not None and voice_client.is_connected() if voice_client else False,
+            'channel': voice_client.channel.name if voice_client and voice_client.channel else None,
+            'channel_id': voice_client.channel.id if voice_client and voice_client.channel else None,
+            'latency': getattr(voice_client, 'latency', None) * 1000 if voice_client and hasattr(voice_client, 'latency') else None,
+            'is_playing': voice_client.is_playing() if voice_client else False,
+            'is_paused': voice_client.is_paused() if voice_client else False
+        }
+        
         return {
-            'queue_length': len(self.queues.get(guild_id, [])),
-            'queue_duration': self.get_queue_duration(guild_id),
+            'queue_length': len(queue),
+            'queue_duration': queue_duration,
+            'queue_duration_formatted': self._format_duration(queue_duration),
             'is_playing': self.is_playing(guild_id),
+            'is_paused': self.is_paused(guild_id),
             'loop_state': self.get_loop_state(guild_id).name,
-            'last_activity': self.get_last_activity(guild_id)
+            'last_activity': self.get_last_activity(guild_id),
+            'current_track': current_track_info,
+            'voice_connection': voice_status,
+            'has_queue': len(queue) > 0,
+            'estimated_finish_time': time.time() + queue_duration if queue_duration > 0 else None
+        }
+    
+    def _format_duration(self, seconds: int) -> str:
+        """Format duration in seconds to human readable format."""
+        if not seconds or seconds <= 0:
+            return "0:00"
+        
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        seconds = seconds % 60
+        
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes}:{seconds:02d}"
+        
+    def get_comprehensive_metrics(self) -> dict:
+        """Get comprehensive metrics for dashboard."""
+        current_time = time.time()
+        
+        # Basic metrics
+        total_guilds = len(self.last_activity)
+        active_voice_connections = len(self.voice_clients)
+        connected_voice_clients = len([vc for vc in self.voice_clients.values() if vc and vc.is_connected()])
+        
+        # Queue metrics
+        total_queued = sum(len(queue) for queue in self.queues.values())
+        non_empty_queues = len([queue for queue in self.queues.values() if queue])
+        total_queue_duration = sum(
+            sum(track.duration for track in queue if track.duration) 
+            for queue in self.queues.values()
+        )
+        
+        # Playing metrics
+        currently_playing = len(self.now_playing)
+        active_sessions = len([
+            guild_id for guild_id, vc in self.voice_clients.items() 
+            if vc and vc.is_playing()
+        ])
+        
+        # Activity metrics
+        active_guilds_1h = len([
+            guild_id for guild_id, last_activity in self.last_activity.items()
+            if current_time - last_activity < 3600  # 1 hour
+        ])
+        
+        active_guilds_24h = len([
+            guild_id for guild_id, last_activity in self.last_activity.items()
+            if current_time - last_activity < 86400  # 24 hours
+        ])
+        
+        # User metrics
+        unique_users_in_queues = set()
+        for queue in self.queues.values():
+            for track in queue:
+                unique_users_in_queues.add(track.requested_by.id)
+        
+        # Performance metrics
+        avg_queue_size = total_queued / max(1, total_guilds)
+        
+        return {
+            # Basic counts
+            'total_guilds_tracked': total_guilds,
+            'active_voice_connections': active_voice_connections,
+            'connected_voice_clients': connected_voice_clients,
+            'connection_success_rate': (connected_voice_clients / max(1, active_voice_connections)) * 100,
+            
+            # Queue metrics
+            'total_queued_tracks': total_queued,
+            'non_empty_queues': non_empty_queues,
+            'avg_queue_size': round(avg_queue_size, 1),
+            'total_queue_duration': total_queue_duration,
+            'total_queue_duration_formatted': self._format_duration(total_queue_duration),
+            
+            # Playback metrics
+            'currently_playing_sessions': currently_playing,
+            'active_playing_sessions': active_sessions,
+            'songs_played_total': self.metrics.get('songs_played', 0),
+            'total_playtime': self.metrics.get('total_playtime', 0),
+            'queue_adds_total': self.metrics.get('queue_adds', 0),
+            'errors_total': self.metrics.get('errors', 0),
+            
+            # Activity metrics
+            'active_guilds_1h': active_guilds_1h,
+            'active_guilds_24h': active_guilds_24h,
+            'unique_users_in_queues': len(unique_users_in_queues),
+            
+            # User preferences
+            'users_with_bass_boost': len([uid for uid, enabled in self.user_bass_boost.items() if enabled]),
+            'users_with_custom_volume': len([uid for uid, vol in self.user_volumes.items() if vol != 0.5]),
+            
+            # Loop states distribution
+            'loop_states_distribution': {
+                'off': len([state for state in self.loop_states.values() if state == LoopState.OFF]),
+                'single': len([state for state in self.loop_states.values() if state == LoopState.SINGLE]),
+                'queue': len([state for state in self.loop_states.values() if state == LoopState.QUEUE])
+            }
         }
 
 # Global music manager instance

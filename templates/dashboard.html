@@ -16,7 +16,6 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #010203, #0b1527);
-            /*background: linear-gradient(135deg, #1e3c72, #2a5298);*/
             color: #ffffff;
             min-height: 100vh;
         }
@@ -34,6 +33,7 @@
             background: rgba(255, 255, 255, 0.1);
             border-radius: 15px;
             backdrop-filter: blur(10px);
+            position: relative;
         }
 
         .header h1 {
@@ -44,15 +44,25 @@
 
         .status-indicator {
             display: inline-block;
-            padding: 5px 15px;
+            padding: 8px 16px;
             border-radius: 20px;
             font-weight: bold;
             margin-left: 10px;
+            transition: all 0.3s ease;
         }
 
-        .status-healthy { background: #4CAF50; }
-        .status-degraded { background: #FF9800; }
-        .status-unhealthy { background: #F44336; }
+        .status-healthy { 
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+        }
+        .status-degraded { 
+            background: linear-gradient(45deg, #FF9800, #f57c00);
+            box-shadow: 0 0 20px rgba(255, 152, 0, 0.3);
+        }
+        .status-unhealthy { 
+            background: linear-gradient(45deg, #F44336, #d32f2f);
+            box-shadow: 0 0 20px rgba(244, 67, 54, 0.3);
+        }
 
         .grid {
             display: grid;
@@ -67,11 +77,30 @@
             padding: 20px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: transform 0.3s ease;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #4CAF50, #2196F3, #FF9800);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .card:hover::before {
+            opacity: 1;
         }
 
         .card-header {
@@ -95,67 +124,155 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
+            padding: 10px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 0.3s ease;
         }
 
         .metric:last-child {
             border-bottom: none;
         }
 
+        .metric:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
         .metric-value {
             font-weight: bold;
             color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
         }
 
         .progress-bar {
             width: 100%;
-            height: 20px;
+            height: 24px;
             background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
+            border-radius: 12px;
             overflow: hidden;
             margin: 5px 0;
+            position: relative;
         }
 
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #4CAF50, #45a049);
-            transition: width 0.3s ease;
+            transition: width 0.5s ease;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
 
         .guild-list {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.3) rgba(255,255,255,0.1);
+        }
+
+        .guild-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .guild-list::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+
+        .guild-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
         }
 
         .guild-item {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 18px;
+            margin: 12px 0;
             border-left: 4px solid #4CAF50;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .guild-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.05), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .guild-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+
+        .guild-item:hover::before {
+            opacity: 1;
         }
 
         .guild-item.voice-connected {
             border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
         }
 
-        .guild-item.has-issues {
-            border-left-color: #FF5722;
+        .guild-item.playing {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+            animation: pulse-border 2s infinite;
+        }
+
+        .guild-item.paused {
+            border-left-color: #FF9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { border-left-width: 4px; }
+            50% { border-left-width: 8px; }
         }
 
         .error-list {
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
         }
 
         .error-item {
             background: rgba(244, 67, 54, 0.1);
             border-left: 4px solid #F44336;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
+            padding: 15px;
+            margin: 12px 0;
+            border-radius: 8px;
             font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .error-item:hover {
+            background: rgba(244, 67, 54, 0.15);
+            transform: translateX(5px);
         }
 
         .error-item.warning {
@@ -166,58 +283,97 @@
         .tabs {
             display: flex;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
+            border-radius: 15px;
             margin-bottom: 20px;
             overflow: hidden;
+            backdrop-filter: blur(10px);
         }
 
         .tab {
             flex: 1;
-            padding: 15px;
+            padding: 18px;
             text-align: center;
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
             border: none;
             background: transparent;
             color: white;
             font-size: 1em;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, #4CAF50, #2196F3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
         }
 
         .tab.active {
             background: rgba(255, 255, 255, 0.2);
+            font-weight: bold;
+        }
+
+        .tab.active::before {
+            opacity: 0.3;
         }
 
         .tab-content {
             display: none;
+            animation: fadeIn 0.5s ease-in-out;
         }
 
         .tab-content.active {
             display: block;
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .chart-container {
             position: relative;
-            height: 300px;
+            height: 350px;
             margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
         }
 
         .auto-refresh {
             position: fixed;
             top: 20px;
             right: 20px;
-            background: rgba(76, 175, 80, 0.9);
+            background: linear-gradient(45deg, #4CAF50, #45a049);
             color: white;
-            padding: 10px 15px;
-            border-radius: 20px;
+            padding: 12px 18px;
+            border-radius: 25px;
             font-size: 0.9em;
             display: flex;
             align-items: center;
             gap: 10px;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
         }
 
         .refresh-indicator {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border: 2px solid white;
             border-top: 2px solid transparent;
             border-radius: 50%;
@@ -235,25 +391,98 @@
 
         .issue-critical {
             background: rgba(244, 67, 54, 0.2);
-            border: 1px solid #F44336;
+            border: 2px solid #F44336;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
         }
 
         .issue-warning {
             background: rgba(255, 152, 0, 0.2);
-            border: 1px solid #FF9800;
+            border: 2px solid #FF9800;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
         }
 
         .recommendation {
             background: rgba(76, 175, 80, 0.2);
-            border: 1px solid #4CAF50;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 18px;
+            margin: 12px 0;
+            transition: all 0.3s ease;
         }
 
+        .recommendation:hover {
+            background: rgba(76, 175, 80, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.2);
+        }
+
+        .guild-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .close-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 8px;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: rotate(90deg);
+        }
+
+        /* Enhanced mobile responsiveness */
         @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 10px;
+            }
+            
             .grid {
                 grid-template-columns: 1fr;
+                gap: 15px;
             }
             
             .header h1 {
@@ -263,6 +492,86 @@
             .tabs {
                 flex-direction: column;
             }
+            
+            .tab {
+                padding: 15px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+            
+            .tab:last-child {
+                border-bottom: none;
+            }
+            
+            .auto-refresh {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px auto;
+                display: inline-flex;
+            }
+            
+            .chart-container {
+                height: 250px;
+                padding: 10px;
+            }
+            
+            .modal-content {
+                margin: 20px;
+                padding: 20px;
+            }
+        }
+
+        /* Keyboard navigation indicators */
+        .tab[data-shortcut]::after {
+            content: attr(data-shortcut);
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            font-size: 0.7em;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 10px;
+            opacity: 0.7;
+        }
+
+        /* Loading states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid #4CAF50;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Status indicators */
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.online { background: #4CAF50; }
+        .status-dot.degraded { background: #FF9800; }
+        .status-dot.offline { background: #F44336; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -270,22 +579,42 @@
     <div class="dashboard-container">
         <div class="header">
             <h1><i class="fas fa-music"></i> {{ bot_name }} Dashboard</h1>
-            <p>Comprehensive Monitoring & Diagnostics</p>
-            <span id="status-indicator" class="status-indicator status-healthy">System Healthy</span>
+            <p>Comprehensive Real-Time Monitoring & Diagnostics</p>
+            <span id="status-indicator" class="status-indicator status-healthy">
+                <span class="status-dot online"></span>System Healthy
+            </span>
+            <div style="position: absolute; top: 15px; right: 15px; font-size: 0.8em; opacity: 0.7;">
+                <i class="fas fa-keyboard"></i> Ctrl+1-6 for quick navigation
+            </div>
         </div>
 
         <div class="auto-refresh">
             <div class="refresh-indicator"></div>
             <span>Live Updates</span>
+            <span style="margin-left: 10px; font-size: 0.8em; opacity: 0.8;">
+                <i class="fas fa-wifi"></i> Connected
+            </span>
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="showTab('overview')">Overview</button>
-            <button class="tab" onclick="showTab('discord')">Discord</button>
-            <button class="tab" onclick="showTab('system')">System</button>
-            <button class="tab" onclick="showTab('database')">Database</button>
-            <button class="tab" onclick="showTab('performance')">Performance</button>
-            <button class="tab" onclick="showTab('troubleshooting')">Troubleshooting</button>
+            <button class="tab active" data-shortcut="Ctrl+1" onclick="showTab('overview')">
+                <i class="fas fa-tachometer-alt"></i> Overview
+            </button>
+            <button class="tab" data-shortcut="Ctrl+2" onclick="showTab('discord')">
+                <i class="fab fa-discord"></i> Discord
+            </button>
+            <button class="tab" data-shortcut="Ctrl+3" onclick="showTab('system')">
+                <i class="fas fa-server"></i> System
+            </button>
+            <button class="tab" data-shortcut="Ctrl+4" onclick="showTab('database')">
+                <i class="fas fa-database"></i> Database
+            </button>
+            <button class="tab" data-shortcut="Ctrl+5" onclick="showTab('performance')">
+                <i class="fas fa-chart-line"></i> Performance
+            </button>
+            <button class="tab" data-shortcut="Ctrl+6" onclick="showTab('troubleshooting')">
+                <i class="fas fa-tools"></i> Diagnostics
+            </button>
         </div>
 
         <!-- Overview Tab -->
@@ -297,21 +626,22 @@
                             <i class="fas fa-robot"></i>
                             Bot Status
                         </div>
+                        <div id="bot-health-indicator" class="status-dot online"></div>
                     </div>
                     <div class="metric">
-                        <span>Status</span>
+                        <span><i class="fas fa-power-off"></i> Status</span>
                         <span id="bot-status" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Uptime</span>
+                        <span><i class="fas fa-clock"></i> Uptime</span>
                         <span id="bot-uptime" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Latency</span>
+                        <span><i class="fas fa-signal"></i> Latency</span>
                         <span id="bot-latency" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Guilds</span>
+                        <span><i class="fas fa-users"></i> Guilds</span>
                         <span id="guild-count" class="metric-value">Loading...</span>
                     </div>
                 </div>
@@ -324,19 +654,19 @@
                         </div>
                     </div>
                     <div class="metric">
-                        <span>Total Members</span>
+                        <span><i class="fas fa-user-friends"></i> Total Members</span>
                         <span id="total-members" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Voice Connections</span>
+                        <span><i class="fas fa-volume-up"></i> Voice Connections</span>
                         <span id="voice-connections" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Queued Tracks</span>
+                        <span><i class="fas fa-music"></i> Queued Tracks</span>
                         <span id="queued-tracks" class="metric-value">Loading...</span>
                     </div>
                     <div class="metric">
-                        <span>Active Playlists</span>
+                        <span><i class="fas fa-list"></i> Active Playlists</span>
                         <span id="active-playlists" class="metric-value">Loading...</span>
                     </div>
                 </div>
@@ -349,8 +679,8 @@
                         </div>
                     </div>
                     <div class="metric">
-                        <span>CPU Usage</span>
-                        <div>
+                        <span><i class="fas fa-microchip"></i> CPU Usage</span>
+                        <div style="flex: 1; margin-left: 15px;">
                             <div class="progress-bar">
                                 <div id="cpu-progress" class="progress-fill" style="width: 0%"></div>
                             </div>
@@ -358,8 +688,8 @@
                         </div>
                     </div>
                     <div class="metric">
-                        <span>Memory Usage</span>
-                        <div>
+                        <span><i class="fas fa-memory"></i> Memory Usage</span>
+                        <div style="flex: 1; margin-left: 15px;">
                             <div class="progress-bar">
                                 <div id="memory-progress" class="progress-fill" style="width: 0%"></div>
                             </div>
@@ -367,8 +697,8 @@
                         </div>
                     </div>
                     <div class="metric">
-                        <span>Disk Usage</span>
-                        <div>
+                        <span><i class="fas fa-hdd"></i> Disk Usage</span>
+                        <div style="flex: 1; margin-left: 15px;">
                             <div class="progress-bar">
                                 <div id="disk-progress" class="progress-fill" style="width: 0%"></div>
                             </div>
@@ -381,11 +711,11 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-exclamation-triangle"></i>
-                            Recent Issues
+                            System Health
                         </div>
                     </div>
                     <div id="recent-issues">
-                        <p>Loading issues...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading health status...</p>
                     </div>
                 </div>
             </div>
@@ -402,7 +732,19 @@
                         </div>
                     </div>
                     <div id="discord-connection-info">
-                        <p>Loading Discord information...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading Discord information...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            Guild Statistics
+                        </div>
+                    </div>
+                    <div id="guild-statistics">
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading guild statistics...</p>
                     </div>
                 </div>
 
@@ -412,9 +754,14 @@
                             <i class="fas fa-users"></i>
                             Guild Information
                         </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="refreshGuildList()" class="refresh-btn">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
                     </div>
                     <div id="guild-list" class="guild-list">
-                        <p>Loading guilds...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading guilds...</p>
                     </div>
                 </div>
             </div>
@@ -426,24 +773,24 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="fas fa-microchip"></i>
+                            <i class="fas fa-info-circle"></i>
                             System Information
                         </div>
                     </div>
                     <div id="system-info">
-                        <p>Loading system information...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading system information...</p>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="fas fa-memory"></i>
+                            <i class="fas fa-cogs"></i>
                             Process Information
                         </div>
                     </div>
                     <div id="process-info">
-                        <p>Loading process information...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading process information...</p>
                     </div>
                 </div>
 
@@ -467,12 +814,12 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="fas fa-database"></i>
+                            <i class="fas fa-table"></i>
                             Database Statistics
                         </div>
                     </div>
                     <div id="database-stats">
-                        <p>Loading database statistics...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading database statistics...</p>
                     </div>
                 </div>
 
@@ -484,7 +831,7 @@
                         </div>
                     </div>
                     <div id="database-connection">
-                        <p>Loading connection information...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading connection information...</p>
                     </div>
                 </div>
 
@@ -513,7 +860,7 @@
                         </div>
                     </div>
                     <div id="command-performance">
-                        <p>Loading performance metrics...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading performance metrics...</p>
                     </div>
                 </div>
 
@@ -525,7 +872,7 @@
                         </div>
                     </div>
                     <div id="music-performance">
-                        <p>Loading music performance...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading music performance...</p>
                     </div>
                 </div>
 
@@ -545,11 +892,11 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-bug"></i>
-                            Error Log
+                            Error Log & Analysis
                         </div>
                     </div>
                     <div id="error-log" class="error-list">
-                        <p>Loading error information...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Loading error information...</p>
                     </div>
                 </div>
             </div>
@@ -561,12 +908,12 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="fas fa-tools"></i>
+                            <i class="fas fa-stethoscope"></i>
                             System Diagnostics
                         </div>
                     </div>
                     <div id="diagnostics-info">
-                        <p>Running diagnostics...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Running comprehensive diagnostics...</p>
                     </div>
                 </div>
 
@@ -574,18 +921,18 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-lightbulb"></i>
-                            Recommendations
+                            Recommendations & Insights
                         </div>
                     </div>
                     <div id="recommendations">
-                        <p>Loading recommendations...</p>
+                        <p><i class="fas fa-spinner fa-spin"></i> Analyzing system for recommendations...</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
+<script>
         let socket = null;
         let charts = {};
         let resourceData = {
@@ -604,6 +951,7 @@
             
             socket.onopen = function(event) {
                 console.log('WebSocket connected');
+                updateConnectionStatus(true);
             };
             
             socket.onmessage = function(event) {
@@ -613,12 +961,25 @@
             
             socket.onclose = function(event) {
                 console.log('WebSocket disconnected, attempting to reconnect...');
+                updateConnectionStatus(false);
                 setTimeout(initWebSocket, 5000);
             };
             
             socket.onerror = function(error) {
                 console.error('WebSocket error:', error);
+                updateConnectionStatus(false);
             };
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.querySelector('.auto-refresh span:last-child');
+            if (connected) {
+                indicator.innerHTML = '<i class="fas fa-wifi"></i> Connected';
+                indicator.style.color = '#4CAF50';
+            } else {
+                indicator.innerHTML = '<i class="fas fa-wifi"></i> Reconnecting...';
+                indicator.style.color = '#FF9800';
+            }
         }
 
         // Update dashboard with new data
@@ -632,24 +993,35 @@
             updateCharts(data);
         }
 
+        // Enhanced overview update function
         function updateOverview(data) {
             if (data.discord && data.discord.bot) {
                 const bot = data.discord.bot;
                 document.getElementById('bot-status').textContent = bot.is_ready ? 'Online' : 'Offline';
                 document.getElementById('bot-uptime').textContent = formatUptime(bot.uptime);
                 document.getElementById('bot-latency').textContent = Math.round(bot.latency) + 'ms';
+                
+                // Update latency color
+                const latencyElement = document.getElementById('bot-latency');
+                if (bot.latency > 500) {
+                    latencyElement.style.color = '#f44336';
+                } else if (bot.latency > 200) {
+                    latencyElement.style.color = '#ff9800';
+                } else {
+                    latencyElement.style.color = '#4caf50';
+                }
             }
 
             if (data.discord && data.discord.totals) {
                 const totals = data.discord.totals;
                 document.getElementById('guild-count').textContent = totals.guild_count || 0;
-                document.getElementById('total-members').textContent = totals.total_members || 0;
-                document.getElementById('voice-connections').textContent = totals.active_voice_connections || 0;
+                document.getElementById('total-members').textContent = (totals.total_members || 0).toLocaleString();
+                document.getElementById('voice-connections').textContent = `${totals.connected_voice_clients || 0}/${totals.active_voice_connections || 0}`;
                 document.getElementById('queued-tracks').textContent = totals.total_queued_tracks || 0;
             }
 
-            if (data.database && data.database.tables) {
-                document.getElementById('active-playlists').textContent = data.database.tables.playlists || 0;
+            if (data.music_comprehensive) {
+                document.getElementById('active-playlists').textContent = data.music_comprehensive.non_empty_queues || 0;
             }
 
             if (data.system && data.system.system) {
@@ -663,15 +1035,200 @@
                 updateRecentIssues(data.troubleshooting.issues);
             }
 
-            // Update status indicator
-            updateStatusIndicator(data.troubleshooting);
+            // Update status indicator with health score
+            if (data.derived_metrics && data.derived_metrics.system_health_score !== undefined) {
+                updateStatusIndicatorWithScore(data.derived_metrics.system_health_score);
+            } else {
+                updateStatusIndicator(data.troubleshooting);
+            }
+        }
+
+        function updateGuildList(guilds) {
+            if (!guilds) return;
+            
+            const html = guilds.map(guild => {
+                const isActive = guild.voice_connection && guild.voice_connection.connected;
+                const isPlaying = guild.music && guild.music.is_playing;
+                const isPaused = guild.music && guild.music.is_paused;
+                const queueLength = guild.music ? guild.music.queue_length : 0;
+                const currentTrack = guild.music ? guild.music.current_track : null;
+                
+                // Status indicators
+                let statusClass = 'guild-item';
+                let statusIcon = '⭕';
+                let statusText = 'Idle';
+                
+                if (isActive && isPlaying) {
+                    statusClass += ' voice-connected playing';
+                    statusIcon = '🔊';
+                    statusText = 'Playing';
+                } else if (isActive && isPaused) {
+                    statusClass += ' voice-connected paused';
+                    statusIcon = '⏸️';
+                    statusText = 'Paused';
+                } else if (isActive) {
+                    statusClass += ' voice-connected';
+                    statusIcon = '🔗';
+                    statusText = 'Connected';
+                }
+                
+                // Activity status
+                const lastActivity = guild.activity ? guild.activity.minutes_since_activity : 0;
+                let activityStatus = '';
+                if (lastActivity > 60) {
+                    activityStatus = `<span style="color: #ff9800;">Inactive ${Math.round(lastActivity/60)}h</span>`;
+                } else if (lastActivity > 5) {
+                    activityStatus = `<span style="color: #ffc107;">Idle ${Math.round(lastActivity)}m</span>`;
+                } else {
+                    activityStatus = '<span style="color: #4caf50;">Active</span>';
+                }
+                
+                return `
+                    <div class="${statusClass}" onclick="showGuildDetails('${guild.id}', ${JSON.stringify(guild).replace(/"/g, '&quot;')})">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                    <strong style="font-size: 1.1em;">${guild.name}</strong>
+                                    <span style="font-size: 1.2em;">${statusIcon}</span>
+                                    <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-size: 0.8em;">
+                                        ${statusText}
+                                    </span>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+                                    <div>
+                                        <small style="color: #ccc;">👥 Members:</small> 
+                                        <strong>${guild.member_count || 0}</strong>
+                                    </div>
+                                    <div>
+                                        <small style="color: #ccc;">🎵 Queue:</small> 
+                                        <strong>${queueLength}</strong>
+                                        ${guild.music && guild.music.queue_duration_formatted ? 
+                                          ` (${guild.music.queue_duration_formatted})` : ''}
+                                    </div>
+                                </div>
+                                
+                                ${currentTrack ? `
+                                    <div style="background: rgba(33, 150, 243, 0.2); padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+                                        <div style="font-weight: bold; margin-bottom: 5px;">🎶 ${currentTrack.title}</div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <small>by ${currentTrack.requested_by}</small>
+                                            <small>
+                                                ${Math.floor(currentTrack.elapsed / 60)}:${String(Math.floor(currentTrack.elapsed % 60)).padStart(2, '0')} / 
+                                                ${Math.floor(currentTrack.duration / 60)}:${String(Math.floor(currentTrack.duration % 60)).padStart(2, '0')}
+                                            </small>
+                                        </div>
+                                        ${currentTrack.progress_percent ? `
+                                            <div class="progress-bar" style="margin-top: 5px;">
+                                                <div class="progress-fill" style="width: ${currentTrack.progress_percent}%; background: linear-gradient(90deg, #2196F3, #1976D2);"></div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                                
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9em;">
+                                    <div>
+                                        ${guild.voice_connection && guild.voice_connection.connected ? 
+                                            `<span style="color: #4CAF50;">🔊 ${guild.voice_connection.channel}</span>` : 
+                                            '<span style="color: #999;">No voice connection</span>'
+                                        }
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div>Loop: <strong>${guild.music ? guild.music.loop_state : 'OFF'}</strong></div>
+                                        <div>${activityStatus}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${guild.activity && guild.activity.commands_24h > 0 ? `
+                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.8em; color: #ccc;">
+                                📊 ${guild.activity.commands_24h} commands today
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('guild-list').innerHTML = html;
         }
 
         function updateDiscordTab(data) {
             if (data.discord) {
                 updateDiscordConnection(data.discord.bot);
                 updateGuildList(data.discord.guilds);
+                updateGuildStatistics(data.discord.totals, data.music_comprehensive);
             }
+        }
+
+        function updateDiscordConnection(bot) {
+            if (!bot) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-user"></i> Bot User</span>
+                    <span class="metric-value">${bot.username}#${bot.discriminator}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-id-card"></i> Bot ID</span>
+                    <span class="metric-value">${bot.id}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-signal"></i> Status</span>
+                    <span class="metric-value">${bot.is_ready ? '🟢 Ready' : '🔴 Not Ready'}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-plug"></i> Connection</span>
+                    <span class="metric-value">${bot.is_closed ? '🔴 Closed' : '🟢 Open'}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-stopwatch"></i> Latency</span>
+                    <span class="metric-value" style="color: ${bot.latency > 500 ? '#f44336' : bot.latency > 200 ? '#ff9800' : '#4caf50'}">${Math.round(bot.latency)}ms</span>
+                </div>
+                ${bot.shard_count ? `
+                    <div class="metric">
+                        <span><i class="fas fa-layer-group"></i> Shards</span>
+                        <span class="metric-value">${bot.shard_count}</span>
+                    </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('discord-connection-info').innerHTML = html;
+        }
+
+        function updateGuildStatistics(totals, musicMetrics) {
+            if (!totals) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-server"></i> Total Guilds</span>
+                    <span class="metric-value">${totals.guild_count || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-users"></i> Total Members</span>
+                    <span class="metric-value">${(totals.total_members || 0).toLocaleString()}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-volume-up"></i> Voice Connections</span>
+                    <span class="metric-value">${totals.connected_voice_clients || 0}/${totals.active_voice_connections || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-play"></i> Playing Now</span>
+                    <span class="metric-value">${totals.currently_playing_sessions || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-list"></i> Non-Empty Queues</span>
+                    <span class="metric-value">${totals.non_empty_queues || 0}</span>
+                </div>
+                ${musicMetrics ? `
+                    <div class="metric">
+                        <span><i class="fas fa-chart-line"></i> Avg Queue Size</span>
+                        <span class="metric-value">${musicMetrics.avg_queue_size || 0}</span>
+                    </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('guild-statistics').innerHTML = html;
         }
 
         function updateSystemTab(data) {
@@ -681,6 +1238,72 @@
             }
         }
 
+        function updateSystemInfo(system) {
+            if (!system) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-microchip"></i> CPU Cores</span>
+                    <span class="metric-value">${system.cpu_count}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-memory"></i> Total Memory</span>
+                    <span class="metric-value">${formatBytes(system.memory.total)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-memory"></i> Available Memory</span>
+                    <span class="metric-value">${formatBytes(system.memory.available)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-hdd"></i> Total Disk</span>
+                    <span class="metric-value">${formatBytes(system.disk.total)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-hdd"></i> Free Disk</span>
+                    <span class="metric-value">${formatBytes(system.disk.free)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-network-wired"></i> Network Sent</span>
+                    <span class="metric-value">${formatBytes(system.network.bytes_sent)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-network-wired"></i> Network Received</span>
+                    <span class="metric-value">${formatBytes(system.network.bytes_recv)}</span>
+                </div>
+            `;
+            
+            document.getElementById('system-info').innerHTML = html;
+        }
+
+        function updateProcessInfo(process) {
+            if (!process) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-memory"></i> Process Memory</span>
+                    <span class="metric-value">${formatBytes(process.memory.rss)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-percentage"></i> Memory %</span>
+                    <span class="metric-value">${process.memory.percent.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-tachometer-alt"></i> CPU %</span>
+                    <span class="metric-value">${process.cpu_percent.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-stream"></i> Threads</span>
+                    <span class="metric-value">${process.num_threads}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-clock"></i> Started</span>
+                    <span class="metric-value">${new Date(process.create_time * 1000).toLocaleString()}</span>
+                </div>
+            `;
+            
+            document.getElementById('process-info').innerHTML = html;
+        }
+
         function updateDatabaseTab(data) {
             if (data.database) {
                 updateDatabaseStats(data.database);
@@ -688,14 +1311,180 @@
             }
         }
 
+        function updateDatabaseStats(database) {
+            if (!database.tables) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-server"></i> Guilds</span>
+                    <span class="metric-value">${database.tables.guilds}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-users"></i> Users</span>
+                    <span class="metric-value">${database.tables.users}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-list"></i> Playlists</span>
+                    <span class="metric-value">${database.tables.playlists}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-music"></i> Songs</span>
+                    <span class="metric-value">${database.tables.songs}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-chart-line"></i> Usage Logs</span>
+                    <span class="metric-value">${database.tables.usage_logs}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-clock"></i> Activity (24h)</span>
+                    <span class="metric-value">${database.activity ? database.activity.recent_usage_24h : 0}</span>
+                </div>
+            `;
+            
+            document.getElementById('database-stats').innerHTML = html;
+        }
+
+        function updateDatabaseConnection(connection) {
+            if (!connection) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-database"></i> Database URL</span>
+                    <span class="metric-value" style="font-size: 0.8em;">${connection.database_url}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-info-circle"></i> Version</span>
+                    <span class="metric-value" style="font-size: 0.8em;">${connection.version}</span>
+                </div>
+                ${connection.pool_info ? Object.entries(connection.pool_info).map(([key, value]) => `
+                    <div class="metric">
+                        <span><i class="fas fa-swimmer"></i> ${key.replace('_', ' ')}</span>
+                        <span class="metric-value">${value}</span>
+                    </div>
+                `).join('') : ''}
+            `;
+            
+            document.getElementById('database-connection').innerHTML = html;
+        }
+
         function updatePerformanceTab(data) {
             if (data.performance) {
                 updateCommandPerformance(data.performance.commands);
-                updateMusicPerformance(data.performance.music);
+            }
+            
+            if (data.music_comprehensive) {
+                updateMusicPerformance(data.music_comprehensive);
             }
             
             if (data.errors) {
                 updateErrorLog(data.errors);
+            }
+            
+            // Update derived metrics
+            if (data.derived_metrics) {
+                updateDerivedMetrics(data.derived_metrics);
+            }
+        }
+
+        function updateCommandPerformance(commands) {
+            if (!commands) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-terminal"></i> Commands (24h)</span>
+                    <span class="metric-value">${commands.total_24h}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-check-circle"></i> Success Rate</span>
+                    <span class="metric-value" style="color: ${commands.success_rate > 95 ? '#4caf50' : commands.success_rate > 80 ? '#ff9800' : '#f44336'}">${commands.success_rate.toFixed(1)}%</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-stopwatch"></i> Avg Execution</span>
+                    <span class="metric-value">${commands.avg_execution_time.toFixed(0)}ms</span>
+                </div>
+            `;
+            
+            document.getElementById('command-performance').innerHTML = html;
+        }
+
+        function updateMusicPerformance(music) {
+            if (!music) return;
+            
+            const html = `
+                <div class="metric">
+                    <span><i class="fas fa-play"></i> Songs Played</span>
+                    <span class="metric-value">${music.songs_played_total || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-clock"></i> Total Playtime</span>
+                    <span class="metric-value">${formatDuration(music.total_playtime || 0)}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-plus"></i> Queue Adds</span>
+                    <span class="metric-value">${music.queue_adds_total || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-music"></i> Active Sessions</span>
+                    <span class="metric-value">${music.currently_playing_sessions || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-link"></i> Connection Rate</span>
+                    <span class="metric-value" style="color: ${music.connection_success_rate > 95 ? '#4caf50' : music.connection_success_rate > 80 ? '#ff9800' : '#f44336'}">${music.connection_success_rate ? music.connection_success_rate.toFixed(1) : 0}%</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-chart-bar"></i> Avg Queue Size</span>
+                    <span class="metric-value">${music.avg_queue_size || 0}</span>
+                </div>
+                <div class="metric">
+                    <span><i class="fas fa-exclamation-triangle"></i> Errors</span>
+                    <span class="metric-value" style="color: ${music.errors_total > 10 ? '#f44336' : music.errors_total > 5 ? '#ff9800' : '#4caf50'}">${music.errors_total || 0}</span>
+                </div>
+            `;
+            
+            document.getElementById('music-performance').innerHTML = html;
+        }
+
+        function updateDerivedMetrics(metrics) {
+            const metricsHtml = `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-line"></i>
+                            Derived Metrics
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <span><i class="fas fa-users"></i> Guild Activity Rate</span>
+                        <span class="metric-value">${metrics.guild_activity_rate?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div class="metric">
+                        <span><i class="fas fa-user-friends"></i> Avg Members/Guild</span>
+                        <span class="metric-value">${Math.round(metrics.avg_members_per_guild || 0)}</span>
+                    </div>
+                    <div class="metric">
+                        <span><i class="fas fa-volume-up"></i> Voice Connection Rate</span>
+                        <span class="metric-value">${metrics.voice_connection_rate?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div class="metric">
+                        <span><i class="fas fa-music"></i> Music Engagement</span>
+                        <span class="metric-value">${metrics.music_engagement_rate?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div class="metric">
+                        <span><i class="fas fa-heart"></i> System Health Score</span>
+                        <span class="metric-value" style="color: ${getHealthColor(metrics.system_health_score)}">${Math.round(metrics.system_health_score || 0)}/100</span>
+                    </div>
+                </div>
+            `;
+            
+            // Add to performance tab if not exists
+            const performanceTab = document.getElementById('performance');
+            if (!document.getElementById('derived-metrics-card')) {
+                const derivedCard = document.createElement('div');
+                derivedCard.id = 'derived-metrics-card';
+                derivedCard.innerHTML = metricsHtml;
+                performanceTab.querySelector('.grid').appendChild(derivedCard);
+            } else {
+                document.getElementById('derived-metrics-card').innerHTML = metricsHtml;
             }
         }
 
@@ -703,6 +1492,7 @@
             if (data.troubleshooting) {
                 updateDiagnostics(data.troubleshooting);
                 updateRecommendations(data.troubleshooting.recommendations);
+                updateSystemInsights(data);
             }
         }
 
@@ -725,25 +1515,70 @@
             }
         }
 
+        function updateStatusIndicatorWithScore(healthScore) {
+            const indicator = document.getElementById('status-indicator');
+            const dot = indicator.querySelector('.status-dot');
+            
+            let status, colorClass;
+            if (healthScore >= 90) {
+                status = 'Excellent';
+                colorClass = 'status-healthy';
+                dot.className = 'status-dot online';
+            } else if (healthScore >= 75) {
+                status = 'Good';
+                colorClass = 'status-healthy';
+                dot.className = 'status-dot online';
+            } else if (healthScore >= 60) {
+                status = 'Fair';
+                colorClass = 'status-degraded';
+                dot.className = 'status-dot degraded';
+            } else if (healthScore >= 40) {
+                status = 'Poor';
+                colorClass = 'status-degraded';
+                dot.className = 'status-dot degraded';
+            } else {
+                status = 'Critical';
+                colorClass = 'status-unhealthy';
+                dot.className = 'status-dot offline';
+            }
+            
+            indicator.className = `status-indicator ${colorClass}`;
+            indicator.innerHTML = `<span class="${dot.className}"></span>System ${status} (${Math.round(healthScore)}%)`;
+        }
+
         function updateStatusIndicator(troubleshooting) {
             const indicator = document.getElementById('status-indicator');
+            const dot = indicator.querySelector('.status-dot');
+            
             if (troubleshooting && troubleshooting.system_health) {
                 const health = troubleshooting.system_health;
                 indicator.className = `status-indicator status-${health}`;
-                indicator.textContent = `System ${health.charAt(0).toUpperCase() + health.slice(1)}`;
+                
+                if (health === 'healthy') {
+                    dot.className = 'status-dot online';
+                } else if (health === 'degraded') {
+                    dot.className = 'status-dot degraded';
+                } else {
+                    dot.className = 'status-dot offline';
+                }
+                
+                indicator.innerHTML = `<span class="${dot.className}"></span>System ${health.charAt(0).toUpperCase() + health.slice(1)}`;
             }
         }
 
         function updateRecentIssues(issues) {
             const container = document.getElementById('recent-issues');
             if (issues.length === 0) {
-                container.innerHTML = '<p style="color: #4CAF50;">No recent issues detected!</p>';
+                container.innerHTML = '<p style="color: #4CAF50; text-align: center; padding: 20px;"><i class="fas fa-check-circle"></i> No recent issues detected!</p>';
                 return;
             }
 
             const issuesHtml = issues.slice(0, 3).map(issue => `
-                <div class="error-item ${issue.type}">
-                    <strong>${issue.title}</strong><br>
+                <div class="error-item ${issue.type}" style="margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                        <i class="fas fa-${issue.type === 'critical' ? 'exclamation-circle' : 'exclamation-triangle'}"></i>
+                        <strong>${issue.title}</strong>
+                    </div>
                     <small>${issue.description}</small>
                 </div>
             `).join('');
@@ -751,235 +1586,67 @@
             container.innerHTML = issuesHtml;
         }
 
-        function updateDiscordConnection(bot) {
-            if (!bot) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Bot User</span>
-                    <span class="metric-value">${bot.username}#${bot.discriminator}</span>
-                </div>
-                <div class="metric">
-                    <span>Bot ID</span>
-                    <span class="metric-value">${bot.id}</span>
-                </div>
-                <div class="metric">
-                    <span>Status</span>
-                    <span class="metric-value">${bot.is_ready ? '🟢 Ready' : '🔴 Not Ready'}</span>
-                </div>
-                <div class="metric">
-                    <span>Connection</span>
-                    <span class="metric-value">${bot.is_closed ? '🔴 Closed' : '🟢 Open'}</span>
-                </div>
-                <div class="metric">
-                    <span>Latency</span>
-                    <span class="metric-value">${Math.round(bot.latency)}ms</span>
-                </div>
-            `;
-            
-            document.getElementById('discord-connection-info').innerHTML = html;
-        }
-
-        function updateGuildList(guilds) {
-            if (!guilds) return;
-            
-            const html = guilds.map(guild => `
-                <div class="guild-item ${guild.voice_connection.connected ? 'voice-connected' : ''}">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>${guild.name}</strong>
-                            <br>
-                            <small>👥 ${guild.member_count} members | 🎵 ${guild.music.queue_length} queued</small>
-                        </div>
-                        <div style="text-align: right;">
-                            ${guild.voice_connection.connected ? 
-                                `<span style="color: #4CAF50;">🔊 ${guild.voice_connection.channel}</span>` : 
-                                '<span style="color: #999;">No voice connection</span>'
-                            }
-                            <br>
-                            <small>Loop: ${guild.music.loop_state}</small>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            
-            document.getElementById('guild-list').innerHTML = html;
-        }
-
-        function updateSystemInfo(system) {
-            if (!system) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>CPU Cores</span>
-                    <span class="metric-value">${system.cpu_count}</span>
-                </div>
-                <div class="metric">
-                    <span>Total Memory</span>
-                    <span class="metric-value">${formatBytes(system.memory.total)}</span>
-                </div>
-                <div class="metric">
-                    <span>Available Memory</span>
-                    <span class="metric-value">${formatBytes(system.memory.available)}</span>
-                </div>
-                <div class="metric">
-                    <span>Total Disk</span>
-                    <span class="metric-value">${formatBytes(system.disk.total)}</span>
-                </div>
-                <div class="metric">
-                    <span>Free Disk</span>
-                    <span class="metric-value">${formatBytes(system.disk.free)}</span>
-                </div>
-            `;
-            
-            document.getElementById('system-info').innerHTML = html;
-        }
-
-        function updateProcessInfo(process) {
-            if (!process) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Process Memory</span>
-                    <span class="metric-value">${formatBytes(process.memory.rss)}</span>
-                </div>
-                <div class="metric">
-                    <span>Memory %</span>
-                    <span class="metric-value">${process.memory.percent.toFixed(1)}%</span>
-                </div>
-                <div class="metric">
-                    <span>CPU %</span>
-                    <span class="metric-value">${process.cpu_percent.toFixed(1)}%</span>
-                </div>
-                <div class="metric">
-                    <span>Threads</span>
-                    <span class="metric-value">${process.num_threads}</span>
-                </div>
-                <div class="metric">
-                    <span>Started</span>
-                    <span class="metric-value">${new Date(process.create_time * 1000).toLocaleString()}</span>
-                </div>
-            `;
-            
-            document.getElementById('process-info').innerHTML = html;
-        }
-
-        function updateDatabaseStats(database) {
-            if (!database.tables) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Guilds</span>
-                    <span class="metric-value">${database.tables.guilds}</span>
-                </div>
-                <div class="metric">
-                    <span>Users</span>
-                    <span class="metric-value">${database.tables.users}</span>
-                </div>
-                <div class="metric">
-                    <span>Playlists</span>
-                    <span class="metric-value">${database.tables.playlists}</span>
-                </div>
-                <div class="metric">
-                    <span>Songs</span>
-                    <span class="metric-value">${database.tables.songs}</span>
-                </div>
-                <div class="metric">
-                    <span>Usage Logs</span>
-                    <span class="metric-value">${database.tables.usage_logs}</span>
-                </div>
-                <div class="metric">
-                    <span>Activity (24h)</span>
-                    <span class="metric-value">${database.activity.recent_usage_24h}</span>
-                </div>
-            `;
-            
-            document.getElementById('database-stats').innerHTML = html;
-        }
-
-        function updateDatabaseConnection(connection) {
-            if (!connection) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Database URL</span>
-                    <span class="metric-value">${connection.database_url}</span>
-                </div>
-                <div class="metric">
-                    <span>Version</span>
-                    <span class="metric-value">${connection.version}</span>
-                </div>
-                ${connection.pool_info ? Object.entries(connection.pool_info).map(([key, value]) => `
-                    <div class="metric">
-                        <span>${key.replace('_', ' ')}</span>
-                        <span class="metric-value">${value}</span>
-                    </div>
-                `).join('') : ''}
-            `;
-            
-            document.getElementById('database-connection').innerHTML = html;
-        }
-
-        function updateCommandPerformance(commands) {
-            if (!commands) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Commands (24h)</span>
-                    <span class="metric-value">${commands.total_24h}</span>
-                </div>
-                <div class="metric">
-                    <span>Success Rate</span>
-                    <span class="metric-value">${commands.success_rate.toFixed(1)}%</span>
-                </div>
-                <div class="metric">
-                    <span>Avg Execution</span>
-                    <span class="metric-value">${commands.avg_execution_time.toFixed(0)}ms</span>
-                </div>
-            `;
-            
-            document.getElementById('command-performance').innerHTML = html;
-        }
-
-        function updateMusicPerformance(music) {
-            if (!music) return;
-            
-            const html = `
-                <div class="metric">
-                    <span>Songs Played</span>
-                    <span class="metric-value">${music.songs_played || 0}</span>
-                </div>
-                <div class="metric">
-                    <span>Total Playtime</span>
-                    <span class="metric-value">${formatDuration(music.total_playtime || 0)}</span>
-                </div>
-                <div class="metric">
-                    <span>Queue Adds</span>
-                    <span class="metric-value">${music.queue_adds || 0}</span>
-                </div>
-                <div class="metric">
-                    <span>Errors</span>
-                    <span class="metric-value">${music.errors || 0}</span>
-                </div>
-            `;
-            
-            document.getElementById('music-performance').innerHTML = html;
-        }
-
         function updateErrorLog(errors) {
             if (!errors.recent_errors) return;
             
-            const html = errors.recent_errors.length === 0 
-                ? '<p style="color: #4CAF50;">No recent errors! 🎉</p>'
-                : errors.recent_errors.slice(0, 10).map(error => `
-                    <div class="error-item">
-                        <strong>${error.error_type}</strong> - ${error.command || 'Unknown'}<br>
-                        <small>${error.error_message}</small><br>
-                        <small style="opacity: 0.7;">${new Date(error.timestamp).toLocaleString()}</small>
-                    </div>
-                `).join('');
+            if (errors.recent_errors.length === 0) {
+                document.getElementById('error-log').innerHTML = '<p style="color: #4CAF50; text-align: center; padding: 20px;"><i class="fas fa-check-circle"></i> No recent errors detected! 🎉</p>';
+                return;
+            }
             
-            document.getElementById('error-log').innerHTML = html;
+            // Categorize errors
+            const errorCategories = {
+                'ConnectionClosed': { icon: '🔌', color: '#f44336', category: 'Connection' },
+                'HTTPException': { icon: '🌐', color: '#ff9800', category: 'API' },
+                'YouTubeError': { icon: '📺', color: '#ff5722', category: 'Media' },
+                'CommandError': { icon: '⚡', color: '#9c27b0', category: 'Command' },
+                'TimeoutError': { icon: '⏱️', color: '#607d8b', category: 'Timeout' }
+            };
+            
+            const html = errors.recent_errors.slice(0, 15).map(error => {
+                const category = errorCategories[error.error_type] || { icon: '❌', color: '#f44336', category: 'Other' };
+                const timeAgo = getTimeAgo(error.timestamp);
+                
+                return `
+                    <div class="error-item" style="border-left-color: ${category.color}">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.2em;">${category.icon}</span>
+                                <strong>${error.error_type}</strong>
+                                <span style="background: ${category.color}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    ${category.category}
+                                </span>
+                            </div>
+                            <small style="color: #999;">${timeAgo}</small>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <strong>Command:</strong> ${error.command || 'Unknown'}
+                            ${error.guild_id ? `<br><strong>Guild:</strong> ${error.guild_id}` : ''}
+                        </div>
+                        <div style="font-size: 0.9em; color: #ccc;">
+                            ${error.error_message}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add error summary
+            const errorTypes = {};
+            errors.recent_errors.forEach(error => {
+                errorTypes[error.error_type] = (errorTypes[error.error_type] || 0) + 1;
+            });
+            
+            const summaryHtml = `
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <strong>Error Summary (Last ${errors.recent_errors.length} errors):</strong><br>
+                    ${Object.entries(errorTypes).map(([type, count]) => {
+                        const category = errorCategories[type] || { icon: '❌' };
+                        return `<span style="margin-right: 15px;">${category.icon} ${type}: ${count}</span>`;
+                    }).join('')}
+                </div>
+            `;
+            
+            document.getElementById('error-log').innerHTML = summaryHtml + html;
         }
 
         function updateDiagnostics(troubleshooting) {
@@ -1009,20 +1676,186 @@
             document.getElementById('recommendations').innerHTML = html;
         }
 
+        function updateSystemInsights(data) {
+            const insights = generateSystemInsights(data);
+            
+            const insightsHtml = `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-brain"></i>
+                            System Insights
+                        </div>
+                    </div>
+                    ${insights.map(insight => `
+                        <div class="recommendation" style="border-left: 4px solid ${insight.color};">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <span style="font-size: 1.2em;">${insight.icon}</span>
+                                <strong>${insight.title}</strong>
+                            </div>
+                            <p>${insight.description}</p>
+                            ${insight.action ? `<small><strong>Action:</strong> ${insight.action}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Add to troubleshooting tab
+            const troubleshootingTab = document.getElementById('troubleshooting');
+            if (!document.getElementById('system-insights')) {
+                const insightsDiv = document.createElement('div');
+                insightsDiv.id = 'system-insights';
+                insightsDiv.innerHTML = insightsHtml;
+                troubleshootingTab.appendChild(insightsDiv);
+            } else {
+                document.getElementById('system-insights').innerHTML = insightsHtml;
+            }
+        }
+
+        function generateSystemInsights(data) {
+            const insights = [];
+            
+            // Music system insights
+            if (data.music_comprehensive) {
+                const music = data.music_comprehensive;
+                
+                if (music.connection_success_rate < 95) {
+                    insights.push({
+                        icon: '🔌',
+                        title: 'Voice Connection Issues',
+                        description: `Connection success rate is ${music.connection_success_rate.toFixed(1)}%. This may indicate network or Discord API issues.`,
+                        action: 'Check network connectivity and Discord API status',
+                        color: '#ff9800'
+                    });
+                }
+                
+                if (music.avg_queue_size > 50) {
+                    insights.push({
+                        icon: '📚',
+                        title: 'Large Queue Sizes',
+                        description: `Average queue size is ${music.avg_queue_size} songs. Consider implementing queue limits.`,
+                        action: 'Review queue size limits in guild settings',
+                        color: '#2196f3'
+                    });
+                }
+                
+                if (music.currently_playing_sessions === 0 && music.total_queued_tracks > 0) {
+                    insights.push({
+                        icon: '⏸️',
+                        title: 'Stalled Playback',
+                        description: 'Songs are queued but nothing is playing. This may indicate playback issues.',
+                        action: 'Check voice permissions and FFmpeg configuration',
+                        color: '#f44336'
+                    });
+                }
+            }
+            
+            // System resource insights
+            if (data.system && data.system.system) {
+                const system = data.system.system;
+                
+                if (system.cpu_percent > 70) {
+                    insights.push({
+                        icon: '🔥',
+                        title: 'High CPU Usage',
+                        description: `CPU usage is at ${system.cpu_percent.toFixed(1)}%. Consider optimizing or scaling resources.`,
+                        action: 'Monitor CPU-intensive processes and consider resource scaling',
+                        color: '#ff5722'
+                    });
+                }
+                
+                if (system.memory.percent > 80) {
+                    insights.push({
+                        icon: '🧠',
+                        title: 'High Memory Usage',
+                        description: `Memory usage is at ${system.memory.percent.toFixed(1)}%. Monitor for memory leaks.`,
+                        action: 'Check for memory leaks and consider garbage collection tuning',
+                        color: '#ff9800'
+                    });
+                }
+            }
+            
+            // Discord insights
+            if (data.discord && data.discord.bot) {
+                const bot = data.discord.bot;
+                
+                if (bot.latency > 300) {
+                    insights.push({
+                        icon: '🐌',
+                        title: 'High Bot Latency',
+                        description: `Bot latency is ${Math.round(bot.latency)}ms. This may affect command responsiveness.`,
+                        action: 'Check network connection and consider server location',
+                        color: '#ff9800'
+                    });
+                }
+                
+                if (data.derived_metrics && data.derived_metrics.guild_activity_rate < 20) {
+                    insights.push({
+                        icon: '😴',
+                        title: 'Low Guild Activity',
+                        description: `Only ${data.derived_metrics.guild_activity_rate.toFixed(1)}% of guilds are active. Consider engagement strategies.`,
+                        action: 'Review bot features and user engagement',
+                        color: '#607d8b'
+                    });
+                }
+            }
+            
+            // Performance insights
+            if (data.performance && data.performance.commands) {
+                const commands = data.performance.commands;
+                
+                if (commands.success_rate < 90) {
+                    insights.push({
+                        icon: '⚠️',
+                        title: 'Command Failures',
+                        description: `Command success rate is ${commands.success_rate.toFixed(1)}%. Review error logs for common issues.`,
+                        action: 'Investigate failed commands and improve error handling',
+                        color: '#f44336'
+                    });
+                }
+                
+                if (commands.avg_execution_time > 2000) {
+                    insights.push({
+                        icon: '⏱️',
+                        title: 'Slow Command Execution',
+                        description: `Average command execution time is ${commands.avg_execution_time.toFixed(0)}ms. Consider optimization.`,
+                        action: 'Profile slow commands and optimize database queries',
+                        color: '#ff9800'
+                    });
+                }
+            }
+            
+            // Add positive insights
+            if (insights.length === 0) {
+                insights.push({
+                    icon: '✅',
+                    title: 'System Running Smoothly',
+                    description: 'All systems are operating within normal parameters. Great job!',
+                    action: 'Continue monitoring and maintain current practices',
+                    color: '#4caf50'
+                });
+            }
+            
+            return insights;
+        }
+
         function updateCharts(data) {
-            // Update resource chart
+            // Update existing charts
             if (data.system && data.system.system) {
                 updateResourceChart(data.system.system);
             }
             
-            // Update database chart
             if (data.database && data.database.tables) {
                 updateDatabaseChart(data.database.tables);
             }
             
-            // Update command chart
             if (data.performance && data.performance.commands && data.performance.commands.popular_commands) {
                 updateCommandChart(data.performance.commands.popular_commands);
+            }
+            
+            // Update music metrics chart
+            if (data.music_comprehensive) {
+                updateMusicMetricsChart(data.music_comprehensive);
             }
         }
 
@@ -1050,13 +1883,15 @@
                             data: resourceData.cpu,
                             borderColor: '#4CAF50',
                             backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                            tension: 0.4
+                            tension: 0.4,
+                            fill: true
                         }, {
                             label: 'Memory %',
                             data: resourceData.memory,
                             borderColor: '#2196F3',
                             backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                            tension: 0.4
+                            tension: 0.4,
+                            fill: true
                         }]
                     },
                     options: {
@@ -1118,98 +1953,337 @@
                     }
                 });
             } else {
-                                charts.database.data.labels = Object.keys(tables);
-                                charts.database.data.datasets[0].data = Object.values(tables);
-                                charts.database.update('none');
+                charts.database.data.labels = Object.keys(tables);
+                charts.database.data.datasets[0].data = Object.values(tables);
+                charts.database.update('none');
+            }
+        }
+
+        function updateCommandChart(popularCommands) {
+            if (!popularCommands || popularCommands.length === 0) return;
+            
+            // Convert the data format if needed
+            let commandData = popularCommands;
+            if (Array.isArray(popularCommands[0]) && popularCommands[0].length === 2) {
+                // Convert from [name, count] format to {name, count} format
+                commandData = popularCommands.map(([name, count]) => ({ name, count }));
+            }
+            
+            if (!charts.command) {
+                const ctx = document.getElementById('commandChart').getContext('2d');
+                charts.command = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: commandData.map(cmd => cmd.name || cmd[0]),
+                        datasets: [{
+                            label: 'Usage (24h)',
+                            data: commandData.map(cmd => cmd.count || cmd[1]),
+                            backgroundColor: [
+                                '#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336',
+                                '#607D8B', '#795548', '#E91E63', '#00BCD4', '#8BC34A'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: {
+                                display: true,
+                                text: 'Most Used Commands (24h)',
+                                color: 'white'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: 'white' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            y: {
+                                ticks: { color: 'white' },
+                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                beginAtZero: true
                             }
                         }
+                    }
+                });
+            } else {
+                charts.command.data.labels = commandData.map(cmd => cmd.name || cmd[0]);
+                charts.command.data.datasets[0].data = commandData.map(cmd => cmd.count || cmd[1]);
+                charts.command.update('none');
+            }
+        }
+
+        function updateMusicMetricsChart(musicData) {
+            if (!charts.musicMetrics && musicData) {
+                const ctx = document.getElementById('musicMetricsChart')?.getContext('2d');
+                if (!ctx) return; // Chart element doesn't exist yet
                 
-                        function updateCommandChart(popularCommands) {
-                            if (!charts.command) {
-                                const ctx = document.getElementById('commandChart').getContext('2d');
-                                charts.command = new Chart(ctx, {
-                                    type: 'bar',
-                                    data: {
-                                        labels: popularCommands.map(cmd => cmd.name),
-                                        datasets: [{
-                                            label: 'Usage (24h)',
-                                            data: popularCommands.map(cmd => cmd.count),
-                                            backgroundColor: '#4CAF50'
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false }
-                                        },
-                                        scales: {
-                                            x: {
-                                                ticks: { color: 'white' },
-                                                grid: { color: 'rgba(255,255,255,0.1)' }
-                                            },
-                                            y: {
-                                                ticks: { color: 'white' },
-                                                grid: { color: 'rgba(255,255,255,0.1)' },
-                                                beginAtZero: true
-                                            }
-                                        }
-                                    }
-                                });
-                            } else {
-                                charts.command.data.labels = popularCommands.map(cmd => cmd.name);
-                                charts.command.data.datasets[0].data = popularCommands.map(cmd => cmd.count);
-                                charts.command.update('none');
+                charts.musicMetrics = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Playing', 'Queued', 'Idle Connections'],
+                        datasets: [{
+                            data: [
+                                musicData.currently_playing_sessions || 0,
+                                (musicData.total_queued_tracks || 0) - (musicData.currently_playing_sessions || 0),
+                                (musicData.active_voice_connections || 0) - (musicData.currently_playing_sessions || 0)
+                            ],
+                            backgroundColor: ['#4CAF50', '#2196F3', '#FF9800']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: 'white' }
                             }
                         }
+                    }
+                });
+            } else if (charts.musicMetrics && musicData) {
+                charts.musicMetrics.data.datasets[0].data = [
+                    musicData.currently_playing_sessions || 0,
+                    (musicData.total_queued_tracks || 0) - (musicData.currently_playing_sessions || 0),
+                    (musicData.active_voice_connections || 0) - (musicData.currently_playing_sessions || 0)
+                ];
+                charts.musicMetrics.update('none');
+            }
+        }
+
+        // Guild details modal
+        function showGuildDetails(guildId, guildData) {
+            const modal = document.createElement('div');
+            modal.className = 'guild-modal';
+            modal.onclick = function(e) {
+                if (e.target === modal) closeModal();
+            };
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-server"></i> ${guildData.name} - Detailed View</h2>
+                        <button onclick="closeModal()" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="grid">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-title">
+                                        <i class="fas fa-info-circle"></i>
+                                        Guild Information
+                                    </div>
+                                </div>
+                                <div class="metric">
+                                    <span>Guild ID</span>
+                                    <span class="metric-value">${guildData.id}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Members</span>
+                                    <span class="metric-value">${guildData.member_count || 0}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Owner</span>
+                                    <span class="metric-value">${guildData.owner ? guildData.owner.name : 'Unknown'}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Created</span>
+                                    <span class="metric-value">${new Date(guildData.created_at).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-title">
+                                        <i class="fas fa-music"></i>
+                                        Music Status
+                                    </div>
+                                </div>
+                                <div class="metric">
+                                    <span>Queue Length</span>
+                                    <span class="metric-value">${guildData.music ? guildData.music.queue_length : 0}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Playing Status</span>
+                                    <span class="metric-value">${guildData.music && guildData.music.is_playing ? '🎵 Playing' : '⏸️ Idle'}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Loop Mode</span>
+                                    <span class="metric-value">${guildData.music ? guildData.music.loop_state : 'OFF'}</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Voice Channel</span>
+                                    <span class="metric-value">${guildData.voice_connection && guildData.voice_connection.connected ? guildData.voice_connection.channel : 'Not connected'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${guildData.music && guildData.music.current_track ? `
+                            <div class="card" style="margin-top: 20px;">
+                                <div class="card-header">
+                                    <div class="card-title">
+                                        <i class="fas fa-play"></i>
+                                        Currently Playing
+                                    </div>
+                                </div>
+                                <div style="padding: 15px; background: rgba(33, 150, 243, 0.2); border-radius: 10px;">
+                                    <h3>${guildData.music.current_track.title}</h3>
+                                    <p>Requested by: ${guildData.music.current_track.requested_by}</p>
+                                    <p>Duration: ${Math.floor(guildData.music.current_track.duration / 60)}:${String(guildData.music.current_track.duration % 60).padStart(2, '0')}</p>
+                                    <div class="progress-bar" style="margin-top: 10px;">
+                                        <div class="progress-fill" style="width: ${guildData.music.current_track.progress_percent || 0}%; background: linear-gradient(90deg, #2196F3, #1976D2);"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.guild-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Utility functions
+        function formatUptime(seconds) {
+            if (!seconds) return '0s';
+            const d = Math.floor(seconds / (3600*24));
+            const h = Math.floor((seconds % (3600*24)) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return [
+                d > 0 ? d + 'd' : '',
+                h > 0 ? h + 'h' : '',
+                m > 0 ? m + 'm' : '',
+                s + 's'
+            ].filter(Boolean).join(' ');
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0s';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return [
+                h > 0 ? h + 'h' : '',
+                m > 0 ? m + 'm' : '',
+                s + 's'
+            ].filter(Boolean).join(' ');
+        }
+
+        function getTimeAgo(timestamp) {
+            const now = Date.now();
+            const diff = now - (timestamp * 1000);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (days > 0) return `${days}d ago`;
+            if (hours > 0) return `${hours}h ago`;
+            if (minutes > 0) return `${minutes}m ago`;
+            return 'Just now';
+        }
+
+        function getHealthColor(score) {
+            if (score >= 90) return '#4CAF50';
+            if (score >= 75) return '#8BC34A';
+            if (score >= 60) return '#FFC107';
+            if (score >= 40) return '#FF9800';
+            return '#F44336';
+        }
+
+        // Tab switching logic
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // Initialize everything
+        window.onload = function() {
+            initWebSocket();
+            
+            // Add loading states to all content areas
+            const loadingAreas = [
+                'bot-status', 'bot-uptime', 'bot-latency', 'guild-count',
+                'total-members', 'voice-connections', 'queued-tracks', 'active-playlists'
+            ];
+            
+            loadingAreas.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                }
+            });
+            
+            // Add refresh buttons functionality
+            window.refreshGuildList = function() {
+                const guildList = document.getElementById('guild-list');
+                guildList.classList.add('loading');
                 
-                        // Utility functions
-                        function formatUptime(seconds) {
-                            if (!seconds) return '0s';
-                            const d = Math.floor(seconds / (3600*24));
-                            const h = Math.floor((seconds % (3600*24)) / 3600);
-                            const m = Math.floor((seconds % 3600) / 60);
-                            const s = Math.floor(seconds % 60);
-                            return [
-                                d > 0 ? d + 'd' : '',
-                                h > 0 ? h + 'h' : '',
-                                m > 0 ? m + 'm' : '',
-                                s + 's'
-                            ].filter(Boolean).join(' ');
+                fetch('/api/discord')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.guilds) {
+                            updateGuildList(data.guilds);
                         }
-                
-                        function formatBytes(bytes) {
-                            if (bytes === 0) return '0 B';
-                            const k = 1024;
-                            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-                            const i = Math.floor(Math.log(bytes) / Math.log(k));
-                            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-                        }
-                
-                        function formatDuration(seconds) {
-                            if (!seconds) return '0s';
-                            const h = Math.floor(seconds / 3600);
-                            const m = Math.floor((seconds % 3600) / 60);
-                            const s = Math.floor(seconds % 60);
-                            return [
-                                h > 0 ? h + 'h' : '',
-                                m > 0 ? m + 'm' : '',
-                                s + 's'
-                            ].filter(Boolean).join(' ');
-                        }
-                
-                        // Tab switching logic
-                        function showTab(tabId) {
-                            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-                            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-                            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
-                            document.getElementById(tabId).classList.add('active');
-                        }
-                
-                        // Initialize everything
-                        window.onload = function() {
-                            initWebSocket();
-                        };
-                    </script>
-                </body>
-                </html>
+                        guildList.classList.remove('loading');
+                    })
+                    .catch(error => {
+                        console.error('Error refreshing guild list:', error);
+                        guildList.classList.remove('loading');
+                    });
+            };
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case '1':
+                            e.preventDefault();
+                            showTab('overview');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            showTab('discord');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            showTab('system');
+                            break;
+                        case '4':
+                            e.preventDefault();
+                            showTab('database');
+                            break;
+                        case '5':
+                            e.preventDefault();
+                            showTab('performance');
+                            break;
+                        case '6':
+                            e.preventDefault();
+                            showTab('troubleshooting');
+                            break;
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>

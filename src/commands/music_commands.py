@@ -30,6 +30,7 @@ class MusicCommands(commands.Cog):
     
     @app_commands.command(name="play", description="Play a song from YouTube")
     @app_commands.describe(query="Song name or YouTube URL")
+
     async def play(self, interaction: discord.Interaction, query: str):
         """Play a song."""
         timer = Timer().start()
@@ -78,7 +79,7 @@ class MusicCommands(commands.Cog):
             
             # Check if currently playing
             if music_manager.is_playing(guild_id):
-                # Add to queue
+            # Add to queue
                 success = await music_manager.add_to_queue(guild_id, track)
                 if success:
                     embed = discord.Embed(
@@ -94,8 +95,15 @@ class MusicCommands(commands.Cog):
                 else:
                     await interaction.followup.send("❌ Queue is full. Please wait for some songs to finish.", ephemeral=True)
             else:
-                # Start playing immediately
-                await self._play_track(interaction, vc, track)
+                # Add to queue first, then start playing
+                success = await music_manager.add_to_queue(guild_id, track)
+                if success:
+                    # Get the track we just added and start playing
+                    first_track = music_manager.pop_next_track(guild_id)  # FIXED: Use pop to remove from queue
+                    if first_track:
+                        await self._play_track(interaction, vc, first_track)
+                else:
+                    await interaction.followup.send("❌ Queue is full.", ephemeral=True)
             
             # Log usage
             timer.stop()
@@ -177,21 +185,22 @@ class MusicCommands(commands.Cog):
             
             # Handle loop modes
             if loop_state == LoopState.SINGLE and now_playing:
+                # For single loop, replay the same track without removing from queue
                 next_track = now_playing.track
             elif loop_state == LoopState.QUEUE and now_playing:
-                # Add current track back to end of queue
+                # For queue loop, move current track to end of queue
                 await music_manager.add_to_queue(guild_id, now_playing.track)
-                next_track = music_manager.get_next_track(guild_id)
+                next_track = music_manager.pop_next_track(guild_id)  # FIXED: Use pop_next_track
             else:
-                next_track = music_manager.get_next_track(guild_id)
+                # Normal mode: get next track and remove from queue
+                next_track = music_manager.pop_next_track(guild_id)  # FIXED: Use pop_next_track
             
             if next_track:
                 vc = music_manager.voice_clients.get(guild_id)
                 if vc and vc.is_connected():
-                    # Create mock interaction for _play_track
+                    # Get a text channel to send the now playing message
                     guild = self.bot.get_guild(guild_id)
                     if guild:
-                        # Get a text channel to send the now playing message
                         channel = None
                         if guild.system_channel:
                             channel = guild.system_channel
@@ -211,10 +220,20 @@ class MusicCommands(commands.Cog):
                             embed = self._create_now_playing_embed(next_track)
                             await channel.send(embed=embed)
             else:
-                # Queue is empty
+                # Queue is empty - clear now playing
                 music_manager.now_playing.pop(guild_id, None)
                 logger.info(f"Queue finished in guild {guild_id}")
-        
+                
+                # Send queue finished message
+                guild = self.bot.get_guild(guild_id)
+                if guild and guild.system_channel:
+                    embed = discord.Embed(
+                        title="🎵 Queue Finished",
+                        description="All songs have been played!",
+                        color=discord.Color.blue()
+                    )
+                    await guild.system_channel.send(embed=embed)
+    
         except Exception as e:
             logger.error(f"Error in _play_next: {e}", exc_info=True)
     
