@@ -1,9 +1,13 @@
 import logging
+import os
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from config.database import get_db, SessionLocal
 from src.database.models import Guild, User, Playlist, Song, Usage
+
+from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +297,136 @@ class DatabaseManager:
         ).limit(limit).all()
         
         return [playlist for playlist, song_count in result]
+    
+    def update_song_download_info(self, song_id: int, local_path: str, file_size: int = None) -> bool:
+        """Update song with download information after file is downloaded."""
+        try:
+            song = self.session.query(Song).filter(Song.id == song_id).first()
+            if song:
+                song.local_path = local_path
+                song.file_size = file_size
+                song.is_downloaded = True
+                song.download_date = datetime.utcnow()
+                song.updated_at = datetime.utcnow()
+                self.session.commit()
+                logger.info(f"Updated download info for song {song_id}: {local_path}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating song download info: {e}")
+            self.session.rollback()
+            return False
+    
+    def get_song_by_url(self, url: str) -> Optional[Song]:
+        """Find existing song by URL to avoid duplicate downloads."""
+        try:
+            return self.session.query(Song).filter(Song.url == url).first()
+        except Exception as e:
+            logger.error(f"Error finding song by URL: {e}")
+            return None
+    
+    def get_downloaded_song_path(self, url: str) -> Optional[str]:
+        """Get local file path for a song if it's already downloaded."""
+        try:
+            song = self.session.query(Song).filter(
+                Song.url == url,
+                Song.is_downloaded == True,
+                Song.local_path.isnot(None)
+            ).first()
+            
+            if song and song.local_path:
+                # Verify file still exists
+                if os.path.exists(song.local_path):
+                    return song.local_path
+                else:
+                    # File was deleted, update database
+                    song.is_downloaded = False
+                    song.local_path = None
+                    self.session.commit()
+                    logger.warning(f"Downloaded file missing for song {song.id}, updated database")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting downloaded song path: {e}")
+            return None
+    
+    def record_song_play(self, song_id: int) -> bool:
+        """Record that a song was played."""
+        try:
+            song = self.session.query(Song).filter(Song.id == song_id).first()
+            if song:
+                song.play_count += 1
+                song.last_played = datetime.utcnow()
+                song.updated_at = datetime.utcnow()
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error recording song play: {e}")
+            self.session.rollback()
+            return False
+    
+    def cleanup_missing_downloads(self) -> int:
+        """Clean up database entries for files that no longer exist."""
+        try:
+            cleaned_count = 0
+            downloaded_songs = self.session.query(Song).filter(
+                Song.is_downloaded == True,
+                Song.local_path.isnot(None)
+            ).all()
+            
+            for song in downloaded_songs:
+                if not os.path.exists(song.local_path):
+                    song.is_downloaded = False
+                    song.local_path = None
+                    cleaned_count += 1
+                    logger.info(f"Cleaned up missing file for song: {song.title}")
+            
+            if cleaned_count > 0:
+                self.session.commit()
+                logger.info(f"Cleaned up {cleaned_count} missing file entries")
+            
+            return cleaned_count
+        except Exception as e:
+            logger.error(f"Error cleaning up missing files: {e}")
+            self.session.rollback()
+            return 0
+    
+    def get_download_stats(self) -> dict:
+        """Get statistics about downloaded songs."""
+        try:
+            downloaded_songs = self.session.query(Song).filter(Song.is_downloaded == True).all()
+            
+            total_files = len(downloaded_songs)
+            total_size = sum(song.file_size or 0 for song in downloaded_songs)
+            
+            # Check which files still exist
+            existing_files = 0
+            existing_size = 0
+            for song in downloaded_songs:
+                if song.local_path and os.path.exists(song.local_path):
+                    existing_files += 1
+                    existing_size += song.file_size or 0
+            
+            return {
+                'total_downloaded': total_files,
+                'total_size_bytes': total_size,
+                'existing_files': existing_files,
+                'existing_size_bytes': existing_size,
+                'missing_files': total_files - existing_files,
+                'total_size_mb': round(total_size / (1024 * 1024), 2),
+                'existing_size_mb': round(existing_size / (1024 * 1024), 2)
+            }
+        except Exception as e:
+            logger.error(f"Error getting download stats: {e}")
+            return {
+                'total_downloaded': 0,
+                'total_size_bytes': 0,
+                'existing_files': 0,
+                'existing_size_bytes': 0,
+                'missing_files': 0,
+                'total_size_mb': 0,
+                'existing_size_mb': 0
+            }
     
     
 

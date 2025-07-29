@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional
+import os
 
 from src.core.music_manager import music_manager, Track, LoopState
 from src.core.database_manager import db_manager
@@ -30,9 +31,8 @@ class MusicCommands(commands.Cog):
     
     @app_commands.command(name="play", description="Play a song from YouTube")
     @app_commands.describe(query="Song name or YouTube URL")
-
     async def play(self, interaction: discord.Interaction, query: str):
-        """Play a song."""
+        """Enhanced play command with database integration."""
         timer = Timer().start()
         
         try:
@@ -59,14 +59,14 @@ class MusicCommands(commands.Cog):
             
             music_manager.voice_clients[guild_id] = vc
             
-            # Get video information
+            # Get video information with database integration
             try:
                 video_info = await youtube_manager.get_info(query, download=settings.download_enabled)
             except YouTubeError as e:
                 await interaction.followup.send(f"❌ {str(e)}", ephemeral=True)
                 return
             
-            # Create track object
+            # Create track object with enhanced info
             track = Track(
                 query=query,
                 title=video_info['title'],
@@ -77,17 +77,39 @@ class MusicCommands(commands.Cog):
                 requested_by=user
             )
             
+            # Add local path info if available
+            if video_info.get('local_path'):
+                track.local_path = video_info['local_path']
+                track.file_size = video_info.get('file_size')
+            
             # Check if currently playing
             if music_manager.is_playing(guild_id):
-            # Add to queue
+                # Add to queue
                 success = await music_manager.add_to_queue(guild_id, track)
                 if success:
+                    # Create enhanced embed with download status
                     embed = discord.Embed(
                         title="✅ Added to Queue",
                         description=f"**{track.title}**\nDuration: {format_duration(track.duration)}",
                         color=discord.Color.green()
                     )
+                    
+                    # Show download status
+                    if video_info.get('local_path'):
+                        embed.add_field(
+                            name="📁 File Status", 
+                            value="Downloaded (faster playback)", 
+                            inline=True
+                        )
+                    else:
+                        embed.add_field(
+                            name="🌐 File Status", 
+                            value="Streaming", 
+                            inline=True
+                        )
+                    
                     embed.set_footer(text=f"Position in queue: {len(music_manager.get_queue(guild_id))}")
+                    
                     if track.thumbnail:
                         embed.set_thumbnail(url=track.thumbnail)
                     
@@ -99,9 +121,9 @@ class MusicCommands(commands.Cog):
                 success = await music_manager.add_to_queue(guild_id, track)
                 if success:
                     # Get the track we just added and start playing
-                    first_track = music_manager.pop_next_track(guild_id)  # FIXED: Use pop to remove from queue
+                    first_track = music_manager.pop_next_track(guild_id)
                     if first_track:
-                        await self._play_track(interaction, vc, first_track)
+                        await self._play_track(interaction, vc, first_track, video_info)
                 else:
                     await interaction.followup.send("❌ Queue is full.", ephemeral=True)
             
@@ -139,41 +161,104 @@ class MusicCommands(commands.Cog):
                     error_message=str(e)
                 )
     
-    async def _play_track(self, interaction: discord.Interaction, voice_client: discord.VoiceClient, track: Track):
-        """Start playing a track."""
+    async def _play_track(self, interaction: discord.Interaction, voice_client: discord.VoiceClient, track: Track, video_info: dict):
+        """Enhanced track playing with database integration."""
         try:
             # Get user preferences
             bass_boost = music_manager.get_bass_boost(track.requested_by.id)
             volume = music_manager.get_user_volume(track.requested_by.id)
             
-            # Create audio source
-            audio_source = await create_audio_source(track, bass_boost=bass_boost, volume=volume)
+            # Create audio source with enhanced info
+            audio_source = await self._create_audio_source(track, video_info, bass_boost, volume)
             
             # Set now playing
             music_manager.set_now_playing(interaction.guild.id, track, voice_client)
             
-            # Play audio
-            voice_client.play(audio_source, after=lambda e: self._handle_playback_finished(interaction.guild.id, e))
+            # Play audio with enhanced callback
+            voice_client.play(audio_source, after=lambda e: self._handle_playback_finished(interaction.guild.id, track, e))
             
-            # Send now playing embed
-            await self._send_now_playing_embed(interaction, track)
+            # Send enhanced now playing embed
+            await self._send_now_playing_embed(interaction, track, video_info)
+            
+            # Record play in database if song exists
+            try:
+                existing_song = db_manager.get_song_by_url(track.url)
+                if existing_song:
+                    db_manager.record_song_play(existing_song.id)
+            except Exception as db_error:
+                logger.error(f"Error recording song play: {db_error}")
             
             logger.info(f"Started playing: {track.title} in guild {interaction.guild.id}")
-            
+        
         except Exception as e:
             logger.error(f"Error playing track: {e}", exc_info=True)
             await interaction.followup.send(f"❌ Error playing track: {str(e)}", ephemeral=True)
     
-    def _handle_playback_finished(self, guild_id: int, error):
-        """Handle when a track finishes playing."""
+    def _handle_playback_finished(self, guild_id: int, track: Track, error):
+        """Enhanced playback finished handler with database integration."""
         if error:
             logger.error(f"Playback error in guild {guild_id}: {error}")
+        
+        # Record successful play completion in database
+        try:
+            existing_song = db_manager.get_song_by_url(track.url)
+            if existing_song and not error:
+                db_manager.record_song_play(existing_song.id)
+        except Exception as db_error:
+            logger.error(f"Error recording completed play: {db_error}")
         
         # Schedule next track using thread-safe method
         asyncio.run_coroutine_threadsafe(
             self._play_next(guild_id), 
             self.bot.loop
         )
+
+    async def _create_audio_source(self, track: Track, video_info: dict, bass_boost: bool = False, volume: float = 0.5) -> discord.AudioSource:
+        """Create audio source with priority for downloaded files."""
+        try:
+            # FFmpeg options
+            ffmpeg_options = {
+                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                'options': f'-vn -filter:a "volume={volume}"'
+            }
+            
+            # Add bass boost if enabled
+            if bass_boost:
+                bass_filter = 'bass=g=4:f=70:w=0.4,equalizer=f=125:t=q:w=1:g=2'
+                ffmpeg_options['options'] += f' -af "{bass_filter}"'
+            
+            # Priority order: downloaded file > stream URL
+            source_url = None
+            
+            # 1. Check for downloaded file in video_info
+            if video_info.get('downloaded_file') and os.path.exists(video_info['downloaded_file']):
+                source_url = video_info['downloaded_file']
+                logger.debug(f"Using downloaded file: {source_url}")
+            
+            # 2. Check database for existing download
+            elif track.url:
+                existing_path = db_manager.get_downloaded_song_path(track.url)
+                if existing_path:
+                    source_url = existing_path
+                    logger.debug(f"Using database cached file: {source_url}")
+            
+            # 3. Fall back to streaming
+            if not source_url:
+                source_url = video_info.get('stream_url')
+                logger.debug(f"Using stream URL: {source_url[:50]}...")
+            
+            if not source_url:
+                raise YouTubeError("No audio source available")
+            
+            # Create audio source
+            audio_source = discord.FFmpegPCMAudio(source_url, **ffmpeg_options)
+            
+            logger.debug(f"Created audio source for: {track.title}")
+            return audio_source
+            
+        except Exception as e:
+            logger.error(f"Error creating enhanced audio source: {e}")
+            raise YouTubeError(f"Failed to create audio source: {str(e)}")
     
     async def _play_next(self, guild_id: int):
         """Play the next track in queue."""
@@ -237,9 +322,49 @@ class MusicCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error in _play_next: {e}", exc_info=True)
     
-    async def _send_now_playing_embed(self, interaction: discord.Interaction, track: Track):
-        """Send now playing embed."""
-        embed = self._create_now_playing_embed(track)
+    async def _send_now_playing_embed(self, interaction: discord.Interaction, track: Track, video_info: dict):
+        """Send enhanced now playing embed with download status."""
+        embed = discord.Embed(
+            title="🎶 Now Playing",
+            description=f"**{track.title}**",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(name="Duration", value=format_duration(track.duration), inline=True)
+        embed.add_field(name="Requested by", value=track.requested_by.mention, inline=True)
+        embed.add_field(name="Uploader", value=track.uploader, inline=True)
+        
+        # Show file status
+        if video_info.get('downloaded_file') or video_info.get('local_path'):
+            file_size_mb = round((video_info.get('file_size', 0)) / (1024 * 1024), 2)
+            embed.add_field(
+                name="📁 File Status", 
+                value=f"Downloaded ({file_size_mb} MB)", 
+                inline=True
+            )
+        else:
+            embed.add_field(
+                name="🌐 File Status", 
+                value="Streaming", 
+                inline=True
+            )
+        
+        # Show play count if available
+        try:
+            existing_song = db_manager.get_song_by_url(track.url)
+            if existing_song and existing_song.play_count > 0:
+                embed.add_field(
+                    name="🔄 Play Count", 
+                    value=f"{existing_song.play_count} times", 
+                    inline=True
+                )
+        except Exception:
+            pass
+        
+        if track.thumbnail:
+            embed.set_thumbnail(url=track.thumbnail)
+        
+        embed.set_footer(text=f"Added {format_duration(int(time.time() - track.added_at))} ago")
         
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed)
@@ -495,6 +620,98 @@ class MusicCommands(commands.Cog):
         
         percentage = int(level * 100)
         await interaction.response.send_message(f"🔊 Volume set to {percentage}% for {interaction.user.mention}")
+
+    @app_commands.command(name="storage", description="Show download storage statistics")
+    @app_commands.describe()
+    async def storage_stats(self, interaction: discord.Interaction):
+        """Show storage and download statistics."""
+        try:
+            await interaction.response.defer()
+            
+            # Get storage information
+            storage_info = youtube_manager.get_storage_info()
+            
+            embed = discord.Embed(
+                title="📊 Storage Statistics",
+                color=discord.Color.blue()
+            )
+            
+            # Database stats
+            embed.add_field(
+                name="🗄️ Database", 
+                value=f"Downloaded: {storage_info.get('total_downloaded', 0)} songs\n"
+                    f"Size: {storage_info.get('total_size_mb', 0):.1f} MB",
+                inline=True
+            )
+            
+            # Filesystem stats
+            embed.add_field(
+                name="💾 Filesystem", 
+                value=f"Files: {storage_info.get('filesystem_files', 0)}\n"
+                    f"Size: {storage_info.get('filesystem_size_mb', 0):.1f} MB",
+                inline=True
+            )
+            
+            # Status
+            missing_files = storage_info.get('missing_files', 0)
+            if missing_files > 0:
+                embed.add_field(
+                    name="⚠️ Status", 
+                    value=f"{missing_files} files missing\n(Run cleanup to fix)",
+                    inline=True
+                )
+            else:
+                embed.add_field(
+                    name="✅ Status", 
+                    value="All files synced",
+                    inline=True
+                )
+            
+            embed.add_field(
+                name="📁 Directory", 
+                value=f"`{storage_info.get('downloads_directory', 'downloads/')}`",
+                inline=False
+            )
+            
+            await interaction.followup.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in storage stats command: {e}")
+            await interaction.followup.send("❌ Error retrieving storage statistics.", ephemeral=True)
+
+    @app_commands.command(name="cleandownloads", description="Clean up old downloads and sync database")
+    @is_dj_or_admin_slash()
+    async def cleanup_downloads(self, interaction: discord.Interaction):
+        """Clean up old downloads and sync database."""
+        try:
+            await interaction.response.defer()
+            
+            # Perform cleanup
+            youtube_manager.cleanup_old_downloads(max_age_hours=24)
+            
+            # Get updated stats
+            storage_info = youtube_manager.get_storage_info()
+            
+            embed = discord.Embed(
+                title="🧹 Cleanup Complete",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(
+                name="📊 Results", 
+                value=f"Files: {storage_info.get('filesystem_files', 0)}\n"
+                    f"Size: {storage_info.get('filesystem_size_mb', 0):.1f} MB\n"
+                    f"Missing: {storage_info.get('missing_files', 0)}",
+                inline=True
+            )
+            
+            embed.set_footer(text="Old downloads removed and database synced")
+            
+            await interaction.followup.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in cleanup command: {e}")
+            await interaction.followup.send("❌ Error during cleanup.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(MusicCommands(bot))

@@ -3,12 +3,15 @@ import functools
 import logging
 import os
 import time
+import hashlib
+from pathlib import Path
 from typing import Dict, List, Optional
 import yt_dlp
 
 from config.settings import settings
 from src.utils.helpers import retry
 from src.utils.validators import sanitize_filename
+from src.core.database_manager import db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -124,8 +127,23 @@ class YouTubeManager:
             raise YouTubeError(f"Search failed: {str(e)}")
     
     @retry(max_attempts=3, delay=2.0)
-    async def get_info(self, url_or_query: str, download: bool = False) -> dict:
-        """Get detailed information about a video."""
+    async def get_info(self, url_or_query: str, download: bool = True) -> Dict:
+        """Enhanced info extraction with database integration."""
+        
+        # First check if we already have this song downloaded in database
+        if download and url_or_query.startswith(('http', 'https')):
+            existing_path = db_manager.get_downloaded_song_path(url_or_query)
+            if existing_path:
+                logger.info(f"Using existing download: {existing_path}")
+                # Get cached info and update with local path
+                cache_key = self._get_cache_key(f"info_{url_or_query}_false")
+                if cache_key in self.cache and self._is_cache_valid(self.cache[cache_key]):
+                    result = self.cache[cache_key]['data'].copy()
+                    result['downloaded_file'] = existing_path
+                    result['local_path'] = existing_path
+                    return result
+        
+        # Continue with existing get_info logic...
         cache_key = self._get_cache_key(f"info_{url_or_query}_{download}")
         
         # Check cache
@@ -139,7 +157,7 @@ class YouTubeManager:
         
         if download and settings.download_enabled:
             info_opts.update({
-                'outtmpl': os.path.join('downloads', '%(title)s.%(ext)s'),
+                'outtmpl': os.path.join('downloads', '%(title)s-%(id)s.%(ext)s'),
             })
         else:
             download = False
@@ -184,18 +202,36 @@ class YouTubeManager:
                 'like_count': entry.get('like_count', 0),
                 'upload_date': entry.get('upload_date'),
                 'formats': entry.get('formats', []),
-                'downloaded_file': None
+                'downloaded_file': None,
+                'local_path': None,
+                'file_size': None
             }
             
-            # Handle downloaded file
+            # Handle downloaded file and update database
             if download:
                 downloaded_file = entry.get('_filename') or entry.get('filepath')
                 if downloaded_file and os.path.exists(downloaded_file):
                     result['downloaded_file'] = downloaded_file
+                    result['local_path'] = downloaded_file
+                    result['file_size'] = os.path.getsize(downloaded_file)
+                    
+                    # Update database if this is for a playlist song
+                    try:
+                        existing_song = db_manager.get_song_by_url(result['url'])
+                        if existing_song:
+                            db_manager.update_song_download_info(
+                                existing_song.id, 
+                                downloaded_file, 
+                                result['file_size']
+                            )
+                            logger.info(f"Updated database with download info for song: {existing_song.id}")
+                    except Exception as db_error:
+                        logger.error(f"Error updating database with download info: {db_error}")
+                else:
                     result['stream_url'] = downloaded_file
             
-            # Get best audio format for streaming
-            if not download and result['formats']:
+            # Get best audio format for streaming if not downloaded
+            if not result.get('downloaded_file') and result['formats']:
                 audio_formats = [f for f in result['formats'] 
                                if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
                 if audio_formats:
@@ -221,6 +257,58 @@ class YouTubeManager:
             logger.error(f"Info extraction error for '{url_or_query}': {e}")
             raise YouTubeError(f"Failed to get video info: {str(e)}")
     
+    def cleanup_old_downloads(self, max_age_hours: int = 24):
+        """Enhanced cleanup with database integration."""
+        downloads_dir = "downloads"
+        if not os.path.exists(downloads_dir):
+            return
+        
+        current_time = time.time()
+        max_age_seconds = max_age_hours * 3600
+        cleaned_files = 0
+        
+        for filename in os.listdir(downloads_dir):
+            filepath = os.path.join(downloads_dir, filename)
+            if os.path.isfile(filepath):
+                file_age = current_time - os.path.getmtime(filepath)
+                if file_age > max_age_seconds:
+                    try:
+                        os.remove(filepath)
+                        cleaned_files += 1
+                        logger.debug(f"Removed old download: {filename}")
+                    except OSError as e:
+                        logger.error(f"Failed to remove {filename}: {e}")
+        
+        # Clean up database entries for missing files
+        db_cleaned = db_manager.cleanup_missing_downloads()
+        
+        if cleaned_files > 0 or db_cleaned > 0:
+            logger.info(f"Cleanup completed: {cleaned_files} files removed, {db_cleaned} database entries cleaned")
+    
+    def get_storage_info(self) -> dict:
+        """Get storage information combining filesystem and database data."""
+        # Get database stats
+        db_stats = db_manager.get_download_stats()
+        
+        # Get filesystem stats
+        downloads_dir = Path("downloads")
+        filesystem_size = 0
+        filesystem_files = 0
+        
+        if downloads_dir.exists():
+            for file_path in downloads_dir.iterdir():
+                if file_path.is_file():
+                    filesystem_files += 1
+                    filesystem_size += file_path.stat().st_size
+        
+        return {
+            **db_stats,
+            'filesystem_files': filesystem_files,
+            'filesystem_size_bytes': filesystem_size,
+            'filesystem_size_mb': round(filesystem_size / (1024 * 1024), 2),
+            'downloads_directory': str(downloads_dir.absolute())
+        }
+    
     def _format_duration(self, duration: Optional[int]) -> str:
         """Format duration in seconds to MM:SS format."""
         if duration is None:
@@ -243,25 +331,6 @@ class YouTubeManager:
         self.cache.clear()
         logger.info("YouTube cache cleared")
     
-    def cleanup_old_downloads(self, max_age_hours: int = 24):
-        """Clean up old downloaded files."""
-        downloads_dir = "downloads"
-        if not os.path.exists(downloads_dir):
-            return
-        
-        current_time = time.time()
-        max_age_seconds = max_age_hours * 3600
-        
-        for filename in os.listdir(downloads_dir):
-            filepath = os.path.join(downloads_dir, filename)
-            if os.path.isfile(filepath):
-                file_age = current_time - os.path.getmtime(filepath)
-                if file_age > max_age_seconds:
-                    try:
-                        os.remove(filepath)
-                        logger.debug(f"Removed old download: {filename}")
-                    except OSError as e:
-                        logger.error(f"Failed to remove {filename}: {e}")
 
 # Global YouTube manager instance
 youtube_manager = YouTubeManager()
