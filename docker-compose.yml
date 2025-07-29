@@ -1,27 +1,179 @@
-version: '3.8'
+# version: '3.8'
 
 services:
+  # Main Bot Application
   bot:
     build: .
-    container_name: bassline-bot-pro
-    environment:
-      - DASHBOARD_ENABLED=true
-      - DASHBOARD_HOST=0.0.0.0
-      - DASHBOARD_PORT=8000
-      - METRICS_ENABLED=true
-      - DATABASE_URL=sqlite:///./data/basslinebot.db
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./downloads:/app/downloads
-      - ./templates:/app/templates
-      - ./.env:/app/.env:ro
-    ports:
-      - "8000:8000"  # Dashboard
-      - "9090:9090"  # Metrics
+    container_name: basslinebot
     restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql://basslinebot:${DB_PASSWORD}@db:5432/basslinebot
+      REDIS_URL: redis://redis:6379/0
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      BOT_NAME: ${BOT_NAME:-BasslineBot}
+      MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-200}
+      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-600}
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com}
+      DASHBOARD_ENABLED: true
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+      METRICS_ENABLED: true
+      HEALTH_CHECK_ENABLED: true
+      DOWNLOAD_ENABLED: true
+      BASS_BOOST_ENABLED: true
+    volumes:
+      - bot_data:/app/data
+      - bot_logs:/app/logs
+      - bot_downloads:/app/downloads
+    networks:
+      - basslinebot
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: basslinebot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: basslinebot
+      POSTGRES_USER: basslinebot
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - basslinebot
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U basslinebot -d basslinebot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: basslinebot-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - basslinebot
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: basslinebot-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - bot
+    networks:
+      - basslinebot
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: basslinebot-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - basslinebot
+
+  # Promtail Log Collector
+  promtail:
+    image: grafana/promtail:latest
+    container_name: basslinebot-promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - bot_logs:/app/logs:ro
+      - nginx_logs:/var/log/nginx:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - basslinebot
+    depends_on:
+      - loki
+
+  # Backup Service
+  backup:
+    image: postgres:15-alpine
+    container_name: basslinebot-backup
+    restart: "no"
+    profiles: ["backup"]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+      - backup_data:/backup
+      - ./scripts/backup.sh:/backup.sh:ro
+    networks:
+      - basslinebot
+    depends_on:
+      - db
+    command: ["/backup.sh"]
+
+  # Watchtower for Automatic Updates
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: basslinebot-watchtower
+    restart: unless-stopped
+    profiles: ["watchtower"]
+    environment:
+      WATCHTOWER_SCHEDULE: "0 30 4 * * *"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_INCLUDE_STOPPED: "true"
+      WATCHTOWER_REVIVE_STOPPED: "false"
+      WATCHTOWER_NOTIFICATIONS: "slack"
+      WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL: ${SLACK_WEBHOOK_URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+# Volumes
+volumes:
+  bot_data:
+    driver: local
+  bot_logs:
+    driver: local
+  bot_downloads:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  loki_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  backup_data:
+    driver: local
+
+# Networks
+networks:
+  basslinebot:
+    driver: bridge

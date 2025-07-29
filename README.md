@@ -1,109 +1,88 @@
-# 🎵 Bassline-Bot
+# BasslineBot
 
-> **A professional, feature-rich Discord music bot with a beautiful web dashboard**
+A Discord music bot that plays high-quality audio and manages playlists for your server. Simple to set up, easy to use, and packed with features your community will love.
 
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.3.2+-blue.svg)](https://discordpy.readthedocs.io/)
-[![Docker](https://img.shields.io/badge/docker-ready-green.svg)](docker-compose.yml)
+[![Docker](https://img.shields.io/badge/docker-ready-green.svg)](docker-compose.yml) (Optional)
 
-**Bassline-Bot** is a  Discord music bot that brings high-quality audio streaming, advanced queue management, and real-time monitoring to your Discord server. Built with modern Python and featuring a sleek web dashboard, it's designed for both casual use and more professional deployments.
+BasslineBot brings music to your Discord server with features like playlist management, queue controls, and a web dashboard to monitor everything. It's built with Python and designed to be reliable and easy to use.
 
-## ✨ Features
+## Features
 
-### 🎶 **Core Music Features**
-- **High-quality audio streaming** from YouTube with FFmpeg processing
-- **Advanced queue management** with shuffle, loop modes, and position control
-- **Bass boost and volume control** with per-user preferences
-- **Multiple loop modes**: Off, Single Song, and Queue looping
-- **Smart auto-disconnect** to save resources when inactive
+### Music Commands
+- High-quality audio streaming from YouTube
+- Queue management with shuffle and loop modes
+- Personal volume and bass boost controls
+- Smart auto-disconnect when not in use
+- Download caching for faster repeated songs
 
-### 📝 **Playlist System (Being Reworked)**
-- **Custom Discord channel-based playlists** - Turn any text channel into a playlist!
-- **Easy playlist creation** with `/setupplaylists` and `/createplaylist`
-- **Collaborative playlist building** - Let your community add songs
-- **Playlist management** with play counts and organization
+### Playlist System
+- Create playlists using Discord text channels
+- Add songs by posting YouTube links or song names in playlist channels
+- Play entire playlists with one command
+- Share playlists with your server members
 
-### 👑 **Admin & Permissions (Being Reworked)**
-- **DJ role system** - Set specific roles that can control music playback
-- **Comprehensive server settings** - Customize queue limits, timeouts, and features
-- **Usage statistics and analytics** - Track bot performance and popular commands
-- **Flexible permission system** - Admins have full control, DJs control playback
+### Admin Tools
+- Set DJ roles to control who can manage music
+- Server settings for queue limits and timeouts
+- Usage statistics to see what's popular
+- Message cleanup commands
 
-### 🌐 **Web Dashboard**
-- **Beautiful, responsive web interface** accessible at `http://localhost:8080`
-- **Real-time statistics** showing active connections, songs played, and server metrics
-- **Live data updates** with automatic refresh every 15 seconds
-- **Performance monitoring** with success rates and response times
-- **Quick access links** to health checks and API endpoints
+### Web Dashboard
+- Real-time bot statistics at http://localhost:8080
+- Monitor server connections and performance
+- View what's playing across all servers
+- Health checks and system information
 
-### 🐳 **Production Ready**
-- **Docker support** with docker-compose for easy deployment
-- **Database integration** with SQLAlchemy (SQLite/PostgreSQL)
-- **Comprehensive logging** with rotation and error tracking
-- **Health monitoring** with Prometheus metrics on port 9090
-- **Error handling and recovery** for stable 24/7 operation
+## Quick Start
 
-## 🚀 Quick Start
+You'll need Python 3.8 or higher and FFmpeg installed on your system. You'll also need a Discord bot token from the Discord Developer Portal.
 
-### Prerequisites
-- **Python 3.8+** (3.11 recommended)
-- **FFmpeg** installed and in your system PATH
-- **Discord bot token** ([Create one here](https://discord.com/developers/applications))
-
-### 1. Clone and Setup
+### 1. Download and Setup
 ```bash
 git clone https://github.com/Cthede11/bassline-bot.git
 cd bassline-bot
 
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/macOS
+# Run the setup script
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 
-# Install dependencies
+# Or install manually
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
+### 2. Configure the Bot
 ```bash
-# Copy environment template
 cp .env.example .env
-
 # Edit .env and add your Discord bot token
-# DISCORD_TOKEN=your_bot_token_here
 ```
 
-### 3. Run the Bot
+### 3. Start the Bot
 ```bash
-# Initialize database
-python scripts/migrate.py
-
-# Start the bot
-python -m src.bot
+python scripts/migrate.py  # Set up the database
+python -m src.bot          # Start the bot
 ```
 
-### 4. Access the Dashboard
-Open your browser and visit: **http://localhost:8080**
+### 4. Check the Dashboard
+Open http://localhost:8080 in your browser to see the web dashboard.
 
-## 🐳 Docker Deployment
+## Docker Setup
 
-For production deployments, use Docker:
+If you prefer using Docker:
 
 ```bash
-# Update .env with your bot token
 cp .env.example .env
-
-# Start with Docker Compose
+# Edit .env with your bot token
 docker-compose up -d
-
-# View logs
-docker-compose logs -f bot
 ```
 
 ## 🎯 Commands
 
-### Music Commands
+### 🎵 Music Commands
 | Command | Description |
 |---------|-------------|
 | `/play <song>` | Play a song or add to queue |
@@ -117,157 +96,116 @@ docker-compose logs -f bot
 | `/nowplaying` | Show detailed current song info |
 | `/volume <0.0-1.0>` | Set your personal volume |
 | `/bassboost` | Toggle bass boost for yourself |
+| `/storagestats` | View download cache statistics |
+| `/cleandownloads` | Clean up old cached files |
 
-### Playlist Commands (Currently Unavailable)
+### 📝 Playlist Commands
 | Command | Description |
 |---------|-------------|
 | `/setupplaylists` | Create playlist category (Admin) |
-| `/createplaylist <name>` | Create a new playlist (Admin) |
-| `/playlist <name>` | Play songs from a playlist |
+| `/createplaylist <name>` | Create a new playlist channel (Admin) |
 | `/listplaylists` | Show all server playlists |
+| `/myplaylists` | View your personal playlists |
+| `/addtoplaylist <playlist> [song]` | Add song to playlist |
+| `/playplaylist <name>` | Play all songs from a playlist |
+| `/playlistinfo <name>` | Show detailed playlist information |
+| `/deleteplaylist <name>` | Delete your playlist |
 
-### Admin Commands (Currently Unavailable)
+### ⚙️ Admin Commands
 | Command | Description |
 |---------|-------------|
 | `/setdjrole <role>` | Set DJ role (Admin) |
-| `/settings` | View/update bot settings (Admin) |
+| `/cleardjrole` | Clear DJ role (Admin) |
+| `/checkdjrole` | Check current DJ role status |
 | `/stats` | Show comprehensive bot statistics (Admin) |
-| `/cleanup` | Clean up bot messages (Admin) |
+| `/settings` | View/update bot settings (Admin) |
+| `/cleanup <count>` | Clean up bot messages (Admin) |
 
-### Utility Commands
+### 🔧 Utility Commands
 | Command | Description |
 |---------|-------------|
-| `/help` | Show all commands and help |
+| `/help [command]` | Show all commands or specific command help |
 | `/ping` | Check bot latency |
 | `/info` | Display bot information and stats |
+| `/search <query>` | Search for songs on YouTube |
 
-## 🔧 Configuration
+## Configuration
 
-### Environment Variables
-
-Key settings in your `.env` file:
+The main settings are in your `.env` file:
 
 ```env
 # Required
 DISCORD_TOKEN=your_discord_bot_token_here
 
-# Optional customization
-BOT_PREFIX=!bl
-BOT_NAME=Bassline-Bot
+# Basic settings
+BOT_NAME=BasslineBot
 MAX_QUEUE_SIZE=100
 DEFAULT_VOLUME=0.5
+
+# Database (SQLite by default)
+DATABASE_URL=sqlite:///./data/basslinebot.db
+
+# Web dashboard
 DASHBOARD_ENABLED=true
 DASHBOARD_PORT=8080
 ```
 
-### Advanced Configuration
+For more configuration options, check out the [configuration guide](docs/configuration.md).
 
-For production deployments, see:
-- [`docs/configuration.md`](docs/configuration.md) - Complete configuration guide
-- [`docs/deployment.md`](docs/deployment.md) - Production deployment options
-
-## 📊 Monitoring (Being Updated)
-
-### Web Dashboard
-- **Main Dashboard**: `http://localhost:8080`
-- **Health Check**: `http://localhost:8080/health`
-- **API Stats**: `http://localhost:8080/api/stats`
-
-### Prometheus Metrics
-- **Metrics Endpoint**: `http://localhost:9090`
-- Track command usage, performance, and system resources
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how to get started:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and test thoroughly
-4. **Commit your changes**: `git commit -m 'Add amazing feature'`
-5. **Push to the branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
-
-Please ensure your code follows a similar style/is readable and includes appropriate tests.
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-basslinebot-pro/
+bassline-bot/
 ├── src/
 │   ├── commands/         # Discord slash commands
-│   ├── core/            # Core bot logic and managers
-│   ├── database/        # Database models and migrations
-│   ├── monitoring/      # Health checks and metrics
-│   ├── utils/           # Utilities and helpers
-│   ├── web/             # Web dashboard and API
-│   └── bot.py           # Main bot entry point
-├── config/              # Configuration and settings
-├── scripts/             # Utility scripts
-├── templates/           # Web dashboard templates
+│   ├── core/            # Bot logic and managers
+│   ├── database/        # Database models
+│   ├── web/             # Web dashboard
+│   └── bot.py           # Main bot file
+├── config/              # Settings and configuration
+├── scripts/             # Setup and utility scripts
 ├── docs/                # Documentation
-├── tests/               # Test suite
-├── docker-compose.yml   # Docker configuration
-├── requirements.txt     # Python dependencies
-└── README.md           # You Are Here ↓
+└── requirements.txt     # Python dependencies
 ```
 
-## 🆘 Support
+## Getting Help
 
-### Getting Help
-- **Documentation**: Check the [`docs/`](docs/) folder for detailed guides
-- **Issues**: [Create an issue](https://github.com/Cthede11/bassline-bot/issues) for bugs or feature requests
-- **Discussions**: Join our [GitHub Discussions](https://github.com/Cthede11/bassline-bot/discussions) for questions
+- Check the [installation guide](docs/installation.md) for detailed setup instructions
+- Look at [troubleshooting](docs/installation.md#troubleshooting) for common issues
+- Create an [issue on GitHub](https://github.com/Cthede11/bassline-bot/issues) for bugs
+- Join discussions for questions and ideas
+- Feel free to reach out to me at: thedechristian11@gmail.com
 
-### Troubleshooting
-- **FFmpeg not found**: Install FFmpeg and add to your system PATH
-- **Bot won't connect**: Check your Discord token in `.env`
-- **Dashboard not loading**: Ensure port 8080 isn't blocked
-- **Music not playing**: Verify FFmpeg installation and bot voice permissions
+## Common Issues
 
-## 📋 Requirements
+**FFmpeg not found**: Install FFmpeg and make sure it's in your system PATH
+**Bot won't connect**: Check your Discord token in the .env file
+**Music not playing**: Make sure the bot has voice permissions in your Discord server
+**Dashboard not loading**: Check that port 8080 isn't blocked by your firewall
 
-### System Requirements
-- **Operating System**: Windows, macOS, or Linux
-- **Python**: 3.8 or higher (3.11 recommended)
-- **Memory**: 512MB RAM minimum (2GB recommended for production)
-- **Disk Space**: 1GB available space
+## Requirements
 
-### Discord Permissions
-Your bot needs these permissions in Discord servers:
-- **Read Messages** and **Send Messages**
-- **Connect** and **Speak** in voice channels
-- **Use Slash Commands**
-- **Manage Messages** (for cleanup commands)
+- Python 3.8 or higher
+- FFmpeg for audio processing
+- Discord bot token
+- At least 512MB RAM (more recommended for busy servers)
 
-## 📜 License
+## Discord Permissions
 
-This project is licensed under the **BSD 3-Clause License** - see the [LICENSE](LICENSE.txt) file for details.
+Your bot needs these permissions in Discord:
+- Read Messages and Send Messages
+- Connect and Speak in voice channels
+- Use Slash Commands
+- Manage Messages (for cleanup commands)
 
-### Additional Terms
-- Must comply with Discord's Terms of Service
-- Users responsible for music copyright compliance
-- Commercial hosting requires permission
-- Attribution required for public deployments
+## License
 
-## 🙏 Acknowledgments
+This project uses the BSD 3-Clause License. See the [LICENSE](LICENSE) file for details.
 
-- **Discord.py** - The amazing Discord API wrapper
-- **FFmpeg** - High-quality audio processing
-- **FastAPI** - Modern web framework for the dashboard
-- **yt-dlp** - YouTube audio extraction
-- **All contributors** who helped make this project awesome!
+## Acknowledgments
 
-## Feel Free To Reach Out To Me:
-- **Github** - https://github.com/Cthede11
-- **Email** - thedechristian11@gmail.com
+Thanks to the developers of Discord.py, FFmpeg, FastAPI, and yt-dlp for making this bot possible.
 
 ---
 
-<div align="center">
-
-**🎵 Built with ❤️ for the Discord community**
-
-[⭐ Star this repo](https://github.com/Cthede11/bassline-bot) • [🐛 Report Bug](https://github.com/Cthede11/bassline-bot/issues) • [💡 Request Feature](https://github.com/Cthede11/bassline-bot/issues)
-
-</div>
+Made by the BasslineBot community. Happy listening! 🎵
