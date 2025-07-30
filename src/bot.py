@@ -10,6 +10,67 @@ import time
 import discord
 from discord.ext import commands, tasks
 
+# ===== EMERGENCY VOICE CONNECTION PATCH =====
+# This patch prevents infinite 4006 (Invalid Session) retry loops
+logging.getLogger(__name__).info("Applying emergency voice connection patch...")
+
+# Store original methods before patching
+original_connect = discord.VoiceChannel.connect
+original_move_to = discord.VoiceClient.move_to
+
+async def patched_connect(self, *, timeout=60.0, reconnect=True, cls=discord.VoiceClient):
+    """Patched voice channel connect with 4006 error limiting."""
+    
+    max_4006_retries = 3  # Limit 4006 retries to 3 attempts
+    attempt_count = 0
+    
+    while attempt_count < max_4006_retries:
+        try:
+            return await original_connect(self, timeout=min(timeout, 10.0), reconnect=False, cls=cls)
+            
+        except discord.ConnectionClosed as e:
+            if e.code == 4006:  # Invalid session
+                attempt_count += 1
+                if attempt_count >= max_4006_retries:
+                    logging.error(f"Voice connection failed after {max_4006_retries} 4006 errors for guild {self.guild.id}")
+                    raise e
+                
+                # Wait before retrying with exponential backoff
+                wait_time = min(30, 2 ** attempt_count)
+                logging.warning(f"4006 error #{attempt_count}, retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                # Non-4006 errors should be raised immediately
+                raise e
+                
+        except Exception as e:
+            # Any other error should be raised immediately
+            raise e
+    
+    # This should never be reached, but just in case
+    raise discord.ConnectionClosed(None, shard_id=None, code=4006)
+
+async def patched_move_to(self, channel):
+    """Patched move_to with better error handling."""
+    try:
+        return await original_move_to(self, channel)
+    except discord.ConnectionClosed as e:
+        if e.code == 4006:
+            logging.error(f"Move failed with 4006 error for guild {channel.guild.id}, disconnecting...")
+            if self.is_connected():
+                await self.disconnect()
+            raise e
+        else:
+            raise e
+
+# Apply the patches
+discord.VoiceChannel.connect = patched_connect
+discord.VoiceClient.move_to = patched_move_to
+
+logging.getLogger(__name__).info("Emergency voice connection patches applied successfully")
+# ===== END EMERGENCY PATCH =====
+
 # Import configuration and setup
 from config.settings import settings
 from config.logging import logger
