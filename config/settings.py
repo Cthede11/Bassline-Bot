@@ -112,7 +112,8 @@ class Settings:
     # Audio & Voice Settings (per shard)
     ffmpeg_options: str = os.getenv('FFMPEG_OPTIONS', '-nostdin -loglevel panic')
     ytdl_format: str = os.getenv('YTDL_FORMAT', 'bestaudio/best')
-    
+    default_volume: int = .50
+
     # Voice connection limits per shard
     max_voice_connections_per_shard: int = safe_int(os.getenv('MAX_VOICE_CONNECTIONS_PER_SHARD', '10'), 10)
     voice_timeout: int = safe_int(os.getenv('VOICE_TIMEOUT', '300'), 300)

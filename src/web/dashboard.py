@@ -137,7 +137,7 @@ async def dashboard_home(request: Request):
                 "error": "Bot not connected"
             })
         else:
-            return HTMLResponse("<h1>❌ Bot not connected</h1>")
+            return HTMLResponse("<h1>Bot not connected</h1>")
     
     try:
         # Get initial stats for the dashboard
@@ -200,42 +200,6 @@ async def websocket_endpoint(websocket: WebSocket):
 # Mark as fixed
 websocket_endpoint_fixed = True
 
-async def websocket_endpoint(websocket: WebSocket):
-    """Fixed WebSocket endpoint with proper error handling."""
-    await manager.connect(websocket)
-    
-    try:
-        # Send initial data immediately
-        bot = get_bot_instance()
-        if bot:
-            initial_data = await get_comprehensive_stats()
-            await manager.send_personal_message(initial_data, websocket)
-        
-        # Keep connection alive and handle client messages
-        while True:
-            try:
-                # Wait for client message or timeout
-                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                
-                # Handle ping messages
-                if message == "ping":
-                    await manager.send_personal_message({"type": "pong"}, websocket)
-                
-            except asyncio.TimeoutError:
-                # Send keep-alive ping
-                await manager.send_personal_message({"type": "ping"}, websocket)
-            except WebSocketDisconnect:
-                break
-            except Exception as e:
-                logger.debug(f"WebSocket message error: {e}")
-                break
-                
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.error(f"WebSocket connection error: {e}")
-    finally:
-        manager.disconnect(websocket)
 
 @app.get("/api/health")
 async def health_check():
@@ -454,8 +418,9 @@ async def background_updates():
             if manager.active_connections:
                 stats = await get_comprehensive_stats()
                 await manager.broadcast({
-                    "type": "update",
-                    "data": stats
+                    "type": "stats_update",
+                    "payload": stats,
+                    "timestamp": datetime.utcnow().isoformat()
                 })
             
             await asyncio.sleep(5)  # Update every 5 seconds

@@ -216,7 +216,7 @@ class ShardedBasslineBot(commands.AutoShardedBot):
         # Send welcome message
         if guild.system_channel:
             embed = discord.Embed(
-                title=f"🎵 {settings.bot_name} has joined!",
+                title=f"{settings.bot_name} has joined!",
                 description="Thank you for adding me to your server!",
                 color=discord.Color.green()
             )

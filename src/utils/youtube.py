@@ -42,6 +42,9 @@ class YouTubeManager:
             'extractflat': False,
             'writethumbnail': False,
             'writeinfojson': False,
+            'noprogress': True,
+            'progress': False,       # 🔹 Force disable progress
+            'encoding': 'utf-8',     # 🔹 Ensure output strings are UTF-8 encoded
         }
     
     def _get_cache_key(self, query: str, options: dict = None) -> str:
@@ -176,6 +179,7 @@ class YouTubeManager:
                     functools.partial(ydl.extract_info, url_or_query, download=download)
                 )
                 info = await asyncio.wait_for(extract_task, timeout=60.0)
+
             
             if not info:
                 raise YouTubeError("No video information found")
@@ -405,13 +409,13 @@ class YouTubeManager:
                 result['database_id'] = song.id
                 
             except Exception as db_error:
-                logger.error(f"❌ Database storage error: {db_error}")
+                logger.error(f"Database storage error: {db_error}")
                 # Continue without database - don't break playback
             
             return result
             
         except Exception as e:
-            logger.error(f"❌ Enhanced info extraction error: {e}")
+            logger.error(f"Enhanced info extraction error: {e}")
             # Fallback to original method
             return await self.get_info(url_or_query, download=settings.download_enabled)
     

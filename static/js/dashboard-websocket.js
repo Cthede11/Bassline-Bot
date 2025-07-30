@@ -64,7 +64,7 @@ class WebSocketManager {
         this.reconnectDelay = 1000;
         
         // Start ping/pong mechanism
-        this.startPing();
+        //this.startPing();
         
         // Update UI
         this.updateConnectionStatus(true);
