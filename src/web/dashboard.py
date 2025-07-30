@@ -34,6 +34,7 @@ def get_bot_instance():
 # FastAPI app
 app = FastAPI(title="BasslineBot Dashboard", version="2.0.0")
 
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -161,41 +162,72 @@ async def dashboard_home(request: Request):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Fixed WebSocket endpoint with proper JSON messaging."""
+    """Handles all dashboard WebSocket communication, keeping the dashboard live."""
     await manager.connect(websocket)
+    logger.info("WebSocket connected to dashboard")
+
     try:
         while True:
-            # Send periodic updates every 5 seconds
-            await asyncio.sleep(5)
-            
+            # Wait briefly for messages or time out to push updates
             try:
-                # Get comprehensive stats
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                msg = json.loads(data)
+
+                # Respond to heartbeat pings
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+                    continue
+
+                # Handle dashboard subscription requests
+                if msg.get("type") == "subscribe":
+                    logger.info(f"Dashboard subscribed to channels: {msg.get('channels')}")
+                    continue
+
+            except asyncio.TimeoutError:
+                # No message received, still continue sending periodic updates
+                pass
+            except Exception as e:
+                logger.warning(f"WebSocket message parse error: {e}")
+                # Continue loop even if a message was malformed
+                pass
+
+            # --- Send live dashboard updates ---
+            try:
+                # 1. Bot & guild stats
                 stats = await get_comprehensive_stats()
-                
-                # Send properly formatted message
-                message = {
+                await websocket.send_json({
                     "type": "stats_update",
                     "payload": stats,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-                
-                await websocket.send_json(message)
-                
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+
+                # 2. System stats (CPU, Memory, Disk)
+                system_info = await get_system_info()
+                await websocket.send_json({
+                    "type": "system_update",
+                    "payload": system_info,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+
+                # 3. Health info (optional, ensures health tab updates)
+                health_info = await get_health_status()
+                await websocket.send_json({
+                    "type": "health_update",
+                    "payload": health_info,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+
             except Exception as e:
-                logger.error(f"Error sending WebSocket update: {e}")
-                # Send error message
-                error_message = {
-                    "type": "error",
-                    "payload": {"message": str(e)},
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-                await websocket.send_json(error_message)
-                
+                logger.error(f"WebSocket update send error: {e}")
+                break
+
     except WebSocketDisconnect:
+        logger.info("Dashboard WebSocket disconnected")
         manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
+
 
 # Mark as fixed
 websocket_endpoint_fixed = True
@@ -405,6 +437,22 @@ async def get_system_info():
     except Exception as e:
         logger.error(f"System info error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+async def get_health_status():
+    """Returns the current health status of the bot/system for the dashboard."""
+    try:
+        # You can call your existing health_check function here
+        return await health_check()
+    except Exception as e:
+        logger.error(f"Failed to get health status: {e}")
+        return {
+            "overall_score": 0,
+            "status": "unhealthy",
+            "system_health": "unhealthy",
+            "issues": [{"title": "Error", "description": str(e)}],
+            "recommendations": [],
+            "checks": {}
+        }
 
 # Background task to send periodic updates
 async def background_updates():
