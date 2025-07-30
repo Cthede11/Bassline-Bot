@@ -68,6 +68,12 @@ class Settings:
     
     # Dashboard Configuration
     dashboard_enabled: bool = safe_bool(os.getenv('DASHBOARD_ENABLED', 'true'))
+    download_enabled: bool = True
+    bass_boost_enabled: bool = False
+    auto_disconnect_timeout: int = 300
+    max_concurrent_downloads: int = 3
+    download_timeout: int = 30
+    cache_ttl: int = 3600
     dashboard_host: str = os.getenv('DASHBOARD_HOST', '0.0.0.0')
     dashboard_port: int = safe_int(os.getenv('DASHBOARD_PORT', '8080'), 8080)
     

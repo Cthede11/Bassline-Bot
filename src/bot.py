@@ -4,6 +4,7 @@ import sys
 import traceback
 from pathlib import Path
 import time
+import locale
 
 import discord
 from discord.ext import commands, tasks
@@ -27,6 +28,13 @@ from src.commands.utility_commands import UtilityCommands
 # Import monitoring
 from src.monitoring.health import get_health_monitor
 from src.web.dashboard import start_dashboard
+
+# Fix Unicode issues on Windows
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
+
 
 class ShardedBasslineBot(commands.AutoShardedBot):
     """Enhanced Discord music bot with automatic sharding support."""

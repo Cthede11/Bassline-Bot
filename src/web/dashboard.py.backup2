@@ -158,48 +158,7 @@ async def dashboard_home(request: Request):
         logger.error(f"Dashboard error: {e}")
         return HTMLResponse(f"<h1>Dashboard Error: {e}</h1>")
 
-
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Fixed WebSocket endpoint with proper JSON messaging."""
-    await manager.connect(websocket)
-    try:
-        while True:
-            # Send periodic updates every 5 seconds
-            await asyncio.sleep(5)
-            
-            try:
-                # Get comprehensive stats
-                stats = await get_comprehensive_stats()
-                
-                # Send properly formatted message
-                message = {
-                    "type": "stats_update",
-                    "payload": stats,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-                
-                await websocket.send_json(message)
-                
-            except Exception as e:
-                logger.error(f"Error sending WebSocket update: {e}")
-                # Send error message
-                error_message = {
-                    "type": "error",
-                    "payload": {"message": str(e)},
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-                await websocket.send_json(error_message)
-                
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        manager.disconnect(websocket)
-
-# Mark as fixed
-websocket_endpoint_fixed = True
-
 async def websocket_endpoint(websocket: WebSocket):
     """Fixed WebSocket endpoint with proper error handling."""
     await manager.connect(websocket)

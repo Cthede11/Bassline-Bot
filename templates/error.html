@@ -3,139 +3,496 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Error</title>
+    <title>Dashboard Error - {{ bot_name | default('Bassline Bot') }}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            background: linear-gradient(135deg, #010203, #0b1527);
             color: #ffffff;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0;
+            overflow: hidden;
         }
         
         .error-container {
             text-align: center;
             max-width: 600px;
+            width: 90%;
             padding: 40px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .error-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #F44336, #FF9800, #4CAF50, #2196F3);
+            animation: shimmer 2s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
         
         .error-icon {
-            font-size: 4em;
+            font-size: 4rem;
             margin-bottom: 20px;
-            color: #f44336;
+            background: linear-gradient(45deg, #F44336, #FF5722);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
         }
         
         h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            background: linear-gradient(45deg, #ffffff, #e0e0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .error-code {
+            font-size: 1.2rem;
+            color: #FF9800;
+            margin-bottom: 20px;
+            font-weight: 500;
         }
         
         .error-message {
-            font-size: 1.2em;
+            font-size: 1.1rem;
             margin-bottom: 30px;
             opacity: 0.9;
             background: rgba(244, 67, 54, 0.1);
             padding: 20px;
-            border-radius: 10px;
-            border-left: 4px solid #f44336;
+            border-radius: 15px;
+            border-left: 4px solid #F44336;
+            line-height: 1.6;
+        }
+
+        .error-message strong {
+            color: #FF9800;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
         }
         
-        .retry-button {
-            display: inline-block;
-            padding: 15px 30px;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 15px 25px;
             color: white;
             text-decoration: none;
             border-radius: 25px;
-            font-weight: bold;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            margin: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            min-width: 140px;
+            justify-content: center;
         }
-        
-        .retry-button:hover {
+
+        .btn-primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
         }
         
-        .back-button {
+        .btn-secondary {
             background: linear-gradient(45deg, #2196F3, #1976D2);
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
         }
-        
-        .back-button:hover {
-            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #F44336, #d32f2f);
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
         }
         
         .error-details {
             margin-top: 30px;
             padding: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
             text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .error-details summary {
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #FF9800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .error-details summary:hover {
+            color: #FFC107;
         }
         
         .error-details pre {
             white-space: pre-wrap;
             word-break: break-word;
-            font-size: 0.9em;
+            font-size: 0.85rem;
             opacity: 0.8;
+            line-height: 1.4;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border-left: 3px solid #F44336;
+        }
+
+        .help-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(33, 150, 243, 0.1);
+            border-radius: 15px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .help-section h3 {
+            color: #2196F3;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .help-section ul {
+            text-align: left;
+            list-style: none;
+            padding: 0;
+        }
+
+        .help-section li {
+            margin: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .help-section li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #2196F3;
+            font-weight: bold;
+        }
+
+        .status-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .status-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-item i {
+            color: #4CAF50;
+            margin-right: 8px;
+        }
+
+        .status-item.error i {
+            color: #F44336;
+        }
+
+        @media (max-width: 768px) {
+            .error-container {
+                padding: 30px 20px;
+                margin: 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .error-icon {
+                font-size: 3rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 250px;
+            }
+
+            .status-info {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Loading animation */
+        .loading-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: loading 1.4s infinite ease-in-out;
+            margin: 0 2px;
+        }
+
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes loading {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
     </style>
 </head>
 <body>
     <div class="error-container">
-        <div class="error-icon">⚠️</div>
+        <div class="error-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        
         <h1>Dashboard Error</h1>
+        
+        {% if error_code %}
+        <div class="error-code">Error Code: {{ error_code }}</div>
+        {% endif %}
         
         <div class="error-message">
             <strong>Something went wrong:</strong><br>
-            {{ error }}
+            {{ error | default('An unexpected error occurred while loading the dashboard.') }}
         </div>
-        
-        <div>
-            <a href="/" class="retry-button">🔄 Retry Dashboard</a>
-            <a href="/health" class="retry-button back-button">🏥 Health Check</a>
+
+        <div class="action-buttons">
+            <button onclick="window.location.reload()" class="btn btn-primary">
+                <i class="fas fa-sync-alt"></i>
+                Reload Dashboard
+            </button>
+            
+            <a href="/" class="btn btn-secondary">
+                <i class="fas fa-home"></i>
+                Go to Home
+            </a>
+            
+            <button onclick="checkStatus()" class="btn btn-secondary" id="status-check">
+                <i class="fas fa-heartbeat"></i>
+                Check Status
+            </button>
         </div>
-        
-        <div class="error-details">
-            <strong>Troubleshooting Tips:</strong>
-            <ul style="text-align: left; margin-top: 15px;">
-                <li>Check if the bot is running and connected to Discord</li>
-                <li>Verify database connectivity</li>
-                <li>Check system resources (CPU, memory, disk space)</li>
-                <li>Review bot logs for detailed error information</li>
-                <li>Try refreshing the page in a few seconds</li>
+
+        <div class="status-info" id="status-info" style="display: none;">
+            <div class="status-item">
+                <i class="fas fa-server"></i>
+                <strong>Server Status:</strong>
+                <span id="server-status">Checking...</span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-wifi"></i>
+                <strong>Connection:</strong>
+                <span id="connection-status">Testing...</span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-database"></i>
+                <strong>Database:</strong>
+                <span id="database-status">Verifying...</span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-cog"></i>
+                <strong>Bot Status:</strong>
+                <span id="bot-status">Checking...</span>
+            </div>
+        </div>
+
+        {% if debug and traceback %}
+        <details class="error-details">
+            <summary>
+                <i class="fas fa-bug"></i>
+                Technical Details
+            </summary>
+            <pre>{{ traceback }}</pre>
+        </details>
+        {% endif %}
+
+        <div class="help-section">
+            <h3>
+                <i class="fas fa-question-circle"></i>
+                Need Help?
+            </h3>
+            <ul>
+                <li>Try refreshing the page - temporary network issues often resolve themselves</li>
+                <li>Check if the bot is online in your Discord server</li>
+                <li>Verify your internet connection is stable</li>
+                <li>If the problem persists, contact your server administrator</li>
+                <li>Check the console for additional error details (F12 → Console)</li>
             </ul>
         </div>
-        
-        <div style="margin-top: 30px; opacity: 0.7; font-size: 0.9em;">
-            <p>If the problem persists, check the bot logs or contact your administrator.</p>
-            <p>Current time: <span id="current-time"></span></p>
-        </div>
     </div>
-    
+
     <script>
-        // Update current time
-        function updateTime() {
-            document.getElementById('current-time').textContent = new Date().toLocaleString();
-        }
-        
-        updateTime();
-        setInterval(updateTime, 1000);
-        
-        // Auto-retry after 10 seconds
-        setTimeout(() => {
-            if (confirm('Would you like to automatically retry loading the dashboard?')) {
-                window.location.href = '/';
+        // Auto-reload after 30 seconds if no user interaction
+        let autoReloadTimer = setTimeout(() => {
+            if (confirm('The page will auto-reload to attempt recovery. Continue?')) {
+                window.location.reload();
             }
-        }, 10000);
+        }, 30000);
+
+        // Cancel auto-reload if user interacts with the page
+        document.addEventListener('click', () => {
+            clearTimeout(autoReloadTimer);
+        });
+
+        // Status check functionality
+        async function checkStatus() {
+            const statusInfo = document.getElementById('status-info');
+            const checkBtn = document.getElementById('status-check');
+            
+            statusInfo.style.display = 'grid';
+            checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+            checkBtn.disabled = true;
+
+            // Check server status
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    document.getElementById('server-status').innerHTML = '<span style="color: #4CAF50;">Online</span>';
+                } else {
+                    document.getElementById('server-status').innerHTML = '<span style="color: #F44336;">Offline</span>';
+                }
+            } catch (error) {
+                document.getElementById('server-status').innerHTML = '<span style="color: #F44336;">Unreachable</span>';
+            }
+
+            // Check connection
+            if (navigator.onLine) {
+                document.getElementById('connection-status').innerHTML = '<span style="color: #4CAF50;">Connected</span>';
+            } else {
+                document.getElementById('connection-status').innerHTML = '<span style="color: #F44336;">Offline</span>';
+            }
+
+            // Check database (via API)
+            try {
+                const dbResponse = await fetch('/api/health/database');
+                if (dbResponse.ok) {
+                    document.getElementById('database-status').innerHTML = '<span style="color: #4CAF50;">Connected</span>';
+                } else {
+                    document.getElementById('database-status').innerHTML = '<span style="color: #F44336;">Error</span>';
+                }
+            } catch (error) {
+                document.getElementById('database-status').innerHTML = '<span style="color: #F44336;">Unreachable</span>';
+            }
+
+            // Check bot status
+            try {
+                const botResponse = await fetch('/api/stats');
+                if (botResponse.ok) {
+                    const data = await botResponse.json();
+                    document.getElementById('bot-status').innerHTML = `<span style="color: #4CAF50;">${data.status || 'Online'}</span>`;
+                } else {
+                    document.getElementById('bot-status').innerHTML = '<span style="color: #F44336;">Offline</span>';
+                }
+            } catch (error) {
+                document.getElementById('bot-status').innerHTML = '<span style="color: #F44336;">Unknown</span>';
+            }
+
+            checkBtn.innerHTML = '<i class="fas fa-heartbeat"></i> Check Status';
+            checkBtn.disabled = false;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                window.location.reload();
+            }
+            if (e.key === 'Escape') {
+                window.history.back();
+            }
+        });
+
+        // Show helpful tip after 5 seconds
+        setTimeout(() => {
+            const tip = document.createElement('div');
+            tip.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: rgba(33, 150, 243, 0.1);
+                border: 1px solid rgba(33, 150, 243, 0.3);
+                border-radius: 10px;
+                padding: 15px;
+                color: white;
+                font-size: 14px;
+                max-width: 300px;
+                animation: slideUp 0.3s ease-out;
+            `;
+            tip.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <i class="fas fa-lightbulb" style="color: #2196F3;"></i>
+                    <strong>Tip</strong>
+                </div>
+                Press <kbd style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px;">Ctrl+R</kbd> to quickly reload the page
+            `;
+            document.body.appendChild(tip);
+        }, 5000);
     </script>
 </body>
 </html>
