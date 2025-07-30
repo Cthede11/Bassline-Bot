@@ -1,179 +1,249 @@
-# version: '3.8'
+version: '3.8'
 
 services:
-  # Main Bot Application
-  bot:
-    build: .
-    container_name: basslinebot
-    restart: unless-stopped
-    depends_on:
-      - db
-      - redis
+  # PostgreSQL Database (Required for sharded deployments)
+  db:
+    image: postgres:15-alpine
+    container_name: basslinebot-db
     environment:
-      DATABASE_URL: postgresql://basslinebot:${DB_PASSWORD}@db:5432/basslinebot
-      REDIS_URL: redis://redis:6379/0
-      DISCORD_TOKEN: ${DISCORD_TOKEN}
-      BOT_NAME: ${BOT_NAME:-BasslineBot}
-      MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE:-200}
-      IDLE_TIMEOUT: ${IDLE_TIMEOUT:-600}
-      SECRET_KEY: ${SECRET_KEY}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com}
-      DASHBOARD_ENABLED: true
-      DASHBOARD_HOST: 0.0.0.0
-      DASHBOARD_PORT: 8080
-      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
-      METRICS_ENABLED: true
-      HEALTH_CHECK_ENABLED: true
-      DOWNLOAD_ENABLED: true
-      BASS_BOOST_ENABLED: true
+      POSTGRES_DB: basslinebot
+      POSTGRES_USER: bassline
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_here}
     volumes:
-      - bot_data:/app/data
-      - bot_logs:/app/logs
-      - bot_downloads:/app/downloads
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - basslinebot
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      test: ["CMD-SHELL", "pg_isready -U bassline -d basslinebot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (Highly recommended for sharding)
+  redis:
+    image: redis:7-alpine
+    container_name: basslinebot-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - basslinebot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Bot with Automatic Sharding (Recommended)
+  bot-auto:
+    build: .
+    container_name: basslinebot-auto
+    environment:
+      # Core Configuration
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      BOT_NAME: ${BOT_NAME:-Bassline-Bot}
+      
+      # Automatic Sharding
+      AUTO_SHARD: "true"
+      
+      # Database & Cache
+      DATABASE_URL: postgresql://bassline:${DB_PASSWORD:-secure_password_here}@db:5432/basslinebot
+      REDIS_URL: redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0
+      
+      # Dashboard (handled by shard 0)
+      DASHBOARD_ENABLED: "true"
+      DASHBOARD_HOST: "0.0.0.0"
+      DASHBOARD_PORT: "8080"
+      
+      # Performance
+      MAX_QUEUE_SIZE: "100"
+      MAX_CONCURRENT_DOWNLOADS: "3"
+      
+      # Monitoring
+      HEALTH_CHECK_ENABLED: "true"
+      METRICS_ENABLED: "true"
+      LOG_LEVEL: "INFO"
+      
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - bot_downloads:/app/downloads
+    ports:
+      - "8080:8080"  # Dashboard
+    networks:
+      - basslinebot
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: basslinebot-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: basslinebot
-      POSTGRES_USER: basslinebot
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - basslinebot
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U basslinebot -d basslinebot"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # =========================================================================
+  # MANUAL SHARDING SETUP (Alternative to automatic sharding above)
+  # Uncomment and configure these services if you prefer manual control
+  # =========================================================================
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: basslinebot-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    networks:
-      - basslinebot
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # # Shard 0 (Main Dashboard Shard)
+  # bot-shard-0:
+  #   build: .
+  #   container_name: basslinebot-shard-0
+  #   environment:
+  #     DISCORD_TOKEN: ${DISCORD_TOKEN}
+  #     BOT_NAME: ${BOT_NAME:-Bassline-Bot}
+  #     
+  #     # Manual Sharding Configuration
+  #     AUTO_SHARD: "false"
+  #     SHARD_ID: "0"
+  #     SHARD_COUNT: "2"
+  #     
+  #     # Database & Cache
+  #     DATABASE_URL: postgresql://bassline:${DB_PASSWORD:-secure_password_here}@db:5432/basslinebot
+  #     REDIS_URL: redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0
+  #     
+  #     # Dashboard (only on shard 0)
+  #     DASHBOARD_ENABLED: "true"
+  #     DASHBOARD_SHARD_ID: "0"
+  #     DASHBOARD_HOST: "0.0.0.0"
+  #     DASHBOARD_PORT: "8080"
+  #     
+  #     # Resource Limits
+  #     MEMORY_LIMIT_MB: "512"
+  #     MAX_VOICE_CONNECTIONS_PER_SHARD: "10"
+  #     
+  #   volumes:
+  #     - ./logs:/app/logs
+  #     - ./data:/app/data
+  #     - shard0_downloads:/app/downloads
+  #   ports:
+  #     - "8080:8080"
+  #   networks:
+  #     - basslinebot
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 768M
+  #         cpus: '1.0'
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: basslinebot-nginx
-    restart: unless-stopped
+  # # Shard 1
+  # bot-shard-1:
+  #   build: .
+  #   container_name: basslinebot-shard-1
+  #   environment:
+  #     DISCORD_TOKEN: ${DISCORD_TOKEN}
+  #     BOT_NAME: ${BOT_NAME:-Bassline-Bot}
+  #     
+  #     # Manual Sharding Configuration
+  #     AUTO_SHARD: "false"
+  #     SHARD_ID: "1"
+  #     SHARD_COUNT: "2"
+  #     
+  #     # Database & Cache
+  #     DATABASE_URL: postgresql://bassline:${DB_PASSWORD:-secure_password_here}@db:5432/basslinebot
+  #     REDIS_URL: redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379/0
+  #     
+  #     # No dashboard on this shard
+  #     DASHBOARD_ENABLED: "false"
+  #     
+  #     # Resource Limits
+  #     MEMORY_LIMIT_MB: "512"
+  #     MAX_VOICE_CONNECTIONS_PER_SHARD: "10"
+  #     
+  #   volumes:
+  #     - ./logs:/app/logs
+  #     - ./data:/app/data
+  #     - shard1_downloads:/app/downloads
+  #   networks:
+  #     - basslinebot
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 768M
+  #         cpus: '1.0'
+
+  # =========================================================================
+  # MONITORING SERVICES (Optional but recommended)
+  # =========================================================================
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: basslinebot-prometheus
     ports:
-      - "80:80"
-      - "443:443"
+      - "9090:9090"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - bot
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
     networks:
       - basslinebot
-
-  # Loki for log aggregation
-  loki:
-    image: grafana/loki:latest
-    container_name: basslinebot-loki
     restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: basslinebot-grafana
     ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
-      - loki_data:/loki
-    networks:
-      - basslinebot
-
-  # Promtail Log Collector
-  promtail:
-    image: grafana/promtail:latest
-    container_name: basslinebot-promtail
-    restart: unless-stopped
-    volumes:
-      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/log:/var/log:ro
-      - bot_logs:/app/logs:ro
-      - nginx_logs:/var/log/nginx:ro
-    command: -config.file=/etc/promtail/config.yml
-    networks:
-      - basslinebot
-    depends_on:
-      - loki
-
-  # Backup Service
-  backup:
-    image: postgres:15-alpine
-    container_name: basslinebot-backup
-    restart: "no"
-    profiles: ["backup"]
+      - "3000:3000"
     environment:
-      PGPASSWORD: ${DB_PASSWORD}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
     volumes:
-      - postgres_data:/var/lib/postgresql/data:ro
-      - backup_data:/backup
-      - ./scripts/backup.sh:/backup.sh:ro
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     networks:
       - basslinebot
-    depends_on:
-      - db
-    command: ["/backup.sh"]
-
-  # Watchtower for Automatic Updates
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: basslinebot-watchtower
     restart: unless-stopped
-    profiles: ["watchtower"]
-    environment:
-      WATCHTOWER_SCHEDULE: "0 30 4 * * *"
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_INCLUDE_STOPPED: "true"
-      WATCHTOWER_REVIVE_STOPPED: "false"
-      WATCHTOWER_NOTIFICATIONS: "slack"
-      WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL: ${SLACK_WEBHOOK_URL}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+    profiles:
+      - monitoring
 
-# Volumes
-volumes:
-  bot_data:
-    driver: local
-  bot_logs:
-    driver: local
-  bot_downloads:
-    driver: local
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  loki_data:
-    driver: local
-  nginx_logs:
-    driver: local
-  backup_data:
-    driver: local
-
-# Networks
 networks:
   basslinebot:
     driver: bridge
+    name: basslinebot-network
+
+volumes:
+  postgres_data:
+    name: basslinebot-postgres-data
+  redis_data:
+    name: basslinebot-redis-data
+  bot_downloads:
+    name: basslinebot-downloads
+  prometheus_data:
+    name: basslinebot-prometheus-data
+  grafana_data:
+    name: basslinebot-grafana-data
+  
+  # Manual sharding volumes (uncomment if using manual sharding)
+  # shard0_downloads:
+  #   name: basslinebot-shard0-downloads
+  # shard1_downloads:
+  #   name: basslinebot-shard1-downloads

@@ -1,117 +1,351 @@
-# Replace your src/web/dashboard.py with this comprehensive version:
-
-"""Comprehensive Web Dashboard for BasslineBot Pro."""
+# src/web/dashboard.py - Fixed WebSocket implementation while keeping your current dashboard
 
 import asyncio
+import time
 import json
 import logging
-import psutil
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import datetime
+from typing import Dict, List, Optional, Set
 
-import discord
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.requests import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
-from src.database.models import Guild, User, Playlist, Song, Usage
 from config.settings import settings
-from config.database import get_db, engine
+from config.logging import logger
 from src.core.database_manager import db_manager
-from src.core.music_manager import music_manager
-from src.monitoring.health import get_health_monitor
 
-logger = logging.getLogger(__name__)
+# Global bot reference
+_bot_instance = None
 
-app = FastAPI(
-    title="BasslineBot Pro Dashboard",
-    description="Comprehensive administrative dashboard for BasslineBot Pro",
-    version="2.0.0"
-)
+def set_bot_instance(bot):
+    """Set the bot instance for the dashboard."""
+    global _bot_instance
+    _bot_instance = bot
+
+def get_bot_instance():
+    """Get the current bot instance."""
+    return _bot_instance
+
+# FastAPI app
+app = FastAPI(title="BasslineBot Dashboard", version="2.0.0")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(",") if settings.cors_enabled else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Static files and templates
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
 
-# Templates
-templates = Jinja2Templates(directory="templates")
+try:
+    templates = Jinja2Templates(directory="templates")
+except Exception as e:
+    logger.warning(f"Could not load templates: {e}")
+    templates = None
 
-# WebSocket connections for live updates
-websocket_connections: List[WebSocket] = []
+# WebSocket connection manager with proper error handling
+class WebSocketManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+        self.connection_data: Dict[WebSocket, dict] = {}
+
+    async def connect(self, websocket: WebSocket):
+        try:
+            await websocket.accept()
+            self.active_connections.add(websocket)
+            self.connection_data[websocket] = {
+                "connected_at": time.time(),
+                "last_ping": time.time()
+            }
+            logger.info(f"WebSocket connected. Total connections: {len(self.active_connections)}")
+        except Exception as e:
+            logger.error(f"Error accepting WebSocket connection: {e}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        if websocket in self.connection_data:
+            del self.connection_data[websocket]
+        logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
+
+    async def send_personal_message(self, message: dict, websocket: WebSocket):
+        if websocket not in self.active_connections:
+            return False
+        
+        try:
+            await websocket.send_text(json.dumps(message))
+            self.connection_data[websocket]["last_ping"] = time.time()
+            return True
+        except Exception as e:
+            logger.error(f"Error sending WebSocket message: {e}")
+            self.disconnect(websocket)
+            return False
+
+    async def broadcast(self, message: dict):
+        if not self.active_connections:
+            return
+        
+        disconnected = set()
+        message_str = json.dumps(message)
+        
+        for connection in self.active_connections.copy():
+            try:
+                await connection.send_text(message_str)
+                self.connection_data[connection]["last_ping"] = time.time()
+            except Exception as e:
+                logger.debug(f"WebSocket send failed: {e}")
+                disconnected.add(connection)
+        
+        # Clean up disconnected connections
+        for connection in disconnected:
+            self.disconnect(connection)
+
+    def cleanup_stale_connections(self):
+        """Remove connections that haven't responded in a while."""
+        current_time = time.time()
+        stale_connections = set()
+        
+        for connection, data in self.connection_data.items():
+            if current_time - data["last_ping"] > 60:  # 60 seconds timeout
+                stale_connections.add(connection)
+        
+        for connection in stale_connections:
+            self.disconnect(connection)
+
+manager = WebSocketManager()
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard_home(request: Request):
+    """Main dashboard page using your existing template."""
+    bot = get_bot_instance()
+    if not bot:
+        if templates:
+            return templates.TemplateResponse("error.html", {
+                "request": request,
+                "error": "Bot not connected"
+            })
+        else:
+            return HTMLResponse("<h1>❌ Bot not connected</h1>")
+    
+    try:
+        # Get initial stats for the dashboard
+        stats = await get_comprehensive_stats()
+        
+        if templates:
+            return templates.TemplateResponse("dashboard.html", {
+                "request": request,
+                "stats": stats,
+                "bot_name": settings.bot_name,
+                "version": "2.0.0",
+                "current_time": datetime.utcnow().isoformat()
+            })
+        else:
+            return HTMLResponse("<h1>Dashboard template not found</h1>")
+            
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return HTMLResponse(f"<h1>Dashboard Error: {e}</h1>")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time updates."""
-    await websocket.accept()
-    websocket_connections.append(websocket)
+    """Fixed WebSocket endpoint with proper error handling."""
+    await manager.connect(websocket)
+    
     try:
-        while True:
-            # Send periodic updates
-            await asyncio.sleep(5)
-            data = await get_comprehensive_stats()
-            await websocket.send_json(data)
-    except WebSocketDisconnect:
-        websocket_connections.remove(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        if websocket in websocket_connections:
-            websocket_connections.remove(websocket)
-
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Comprehensive main dashboard page."""
-    try:
-        stats = await get_comprehensive_stats()
+        # Send initial data immediately
+        bot = get_bot_instance()
+        if bot:
+            initial_data = await get_comprehensive_stats()
+            await manager.send_personal_message(initial_data, websocket)
         
-        return templates.TemplateResponse("dashboard.html", {
-            "request": request,
-            "stats": stats,
-            "bot_name": settings.bot_name,
-            "version": "2.0.0",
-            "current_time": datetime.utcnow().isoformat()
-        })
+        # Keep connection alive and handle client messages
+        while True:
+            try:
+                # Wait for client message or timeout
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                
+                # Handle ping messages
+                if message == "ping":
+                    await manager.send_personal_message({"type": "pong"}, websocket)
+                
+            except asyncio.TimeoutError:
+                # Send keep-alive ping
+                await manager.send_personal_message({"type": "ping"}, websocket)
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.debug(f"WebSocket message error: {e}")
+                break
+                
+    except WebSocketDisconnect:
+        pass
     except Exception as e:
-        logger.error(f"Dashboard error: {e}")
-        return templates.TemplateResponse("error.html", {
-            "request": request,
-            "error": str(e)
-        })
+        logger.error(f"WebSocket connection error: {e}")
+    finally:
+        manager.disconnect(websocket)
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
-    """Enhanced health check endpoint."""
+    """Health check endpoint with comprehensive bot information."""
+    bot = get_bot_instance()
+    if not bot:
+        raise HTTPException(status_code=503, detail="Bot not connected")
+    
     try:
-        health_monitor = get_health_monitor()
-        if health_monitor:
-            health_data = health_monitor.get_detailed_health()
-        else:
-            health_data = await basic_health_check()
+        health_data = {
+            "status": "healthy" if bot.is_ready() else "unhealthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "uptime_seconds": time.time() - bot.startup_time,
+            "is_sharded": hasattr(bot, 'shard_count') and bot.shard_count is not None,
+            "bot_ready": bot.is_ready(),
+            "guild_count": len(bot.guilds),
+            "user_count": sum(g.member_count for g in bot.guilds),
+            "latency": round(bot.latency * 1000, 2) if hasattr(bot, 'latency') else 0,
+            "shard_info": None
+        }
+        
+        # Add shard-specific health information
+        if hasattr(bot, 'shards') and bot.shards:
+            shard_health = {}
+            for shard_id, shard in bot.shards.items():
+                shard_guilds = [g for g in bot.guilds if g.shard_id == shard_id]
+                shard_health[shard_id] = {
+                    "latency": round(shard.latency * 1000, 2),
+                    "is_ready": not shard.is_closed(),
+                    "guild_count": len(shard_guilds),
+                    "user_count": sum(g.member_count for g in shard_guilds),
+                    "is_ws_ratelimited": shard.is_ws_ratelimited(),
+                }
+            
+            health_data["shard_info"] = {
+                "shard_count": bot.shard_count,
+                "shards": shard_health,
+                "total_guilds": len(bot.guilds),
+                "total_users": sum(g.member_count for g in bot.guilds)
+            }
         
         return health_data
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Health check failed: {str(e)}")
+        logger.error(f"Health check error: {e}")
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+async def get_comprehensive_stats():
+    """Get comprehensive statistics for the dashboard."""
+    bot = get_bot_instance()
+    if not bot:
+        return {"error": "Bot not connected"}
+    
+    try:
+        # System information
+        import psutil
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        
+        # Bot statistics
+        total_guilds = len(bot.guilds)
+        total_users = sum(g.member_count for g in bot.guilds)
+        active_voice = len([g for g in bot.guilds if g.voice_client])
+        
+        # Build comprehensive stats object
+        stats = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "discord": {
+                "bot": {
+                    "username": bot.user.name if bot.user else "Unknown",
+                    "discriminator": bot.user.discriminator if bot.user else "0000",
+                    "id": bot.user.id if bot.user else 0,
+                    "is_ready": bot.is_ready(),
+                    "is_closed": bot.is_closed() if hasattr(bot, 'is_closed') else False,
+                    "latency": round(bot.latency * 1000, 2) if hasattr(bot, 'latency') else 0,
+                    "shard_count": getattr(bot, 'shard_count', 1)
+                },
+                "totals": {
+                    "guilds": total_guilds,
+                    "users": total_users,
+                    "voice_connections": active_voice,
+                    "channels": sum(len(g.channels) for g in bot.guilds)
+                },
+                "guilds": []
+            },
+            "system": {
+                "cpu_percent": round(cpu_percent, 1),
+                "memory_percent": round(memory.percent, 1),
+                "memory_used_mb": round(memory.used / 1024 / 1024, 2),
+                "memory_total_mb": round(memory.total / 1024 / 1024, 2),
+                "uptime": time.time() - bot.startup_time
+            },
+            "music_comprehensive": {
+                "total_connections": active_voice,
+                "total_queued": 0,  # You can implement this based on your music manager
+                "total_playing": active_voice
+            }
+        }
+        
+        # Add guild information
+        for guild in bot.guilds[:10]:  # Limit to first 10 for performance
+            guild_info = {
+                "id": guild.id,
+                "name": guild.name,
+                "member_count": guild.member_count,
+                "has_voice_client": guild.voice_client is not None,
+                "shard_id": getattr(guild, 'shard_id', 0) if hasattr(bot, 'shard_count') else 0
+            }
+            stats["discord"]["guilds"].append(guild_info)
+        
+        # Add shard-specific information
+        if hasattr(bot, 'shards') and bot.shards:
+            shard_data = []
+            for shard_id, shard in bot.shards.items():
+                shard_guilds = [g for g in bot.guilds if g.shard_id == shard_id]
+                shard_info = {
+                    "shard_id": shard_id,
+                    "latency": round(shard.latency * 1000, 2),
+                    "is_ready": not shard.is_closed(),
+                    "guild_count": len(shard_guilds),
+                    "user_count": sum(g.member_count for g in shard_guilds),
+                    "is_ws_ratelimited": shard.is_ws_ratelimited()
+                }
+                shard_data.append(shard_info)
+            
+            stats["shards"] = shard_data
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting comprehensive stats: {e}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+            "discord": {
+                "bot": {"is_ready": False},
+                "totals": {"guilds": 0, "users": 0}
+            }
+        }
 
 @app.get("/api/stats")
 async def get_stats():
-    """Get comprehensive bot statistics."""
+    """API endpoint for getting stats."""
     return await get_comprehensive_stats()
 
 @app.get("/api/system")
 async def get_system_info():
     """Get detailed system information."""
     try:
+        import psutil
+        import sys
+        
         # System metrics
         cpu_percent = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory()
@@ -123,10 +357,6 @@ async def get_system_info():
         # Process information
         process = psutil.Process()
         process_memory = process.memory_info()
-        
-        # Python/Bot specific info
-        import sys
-        python_version = sys.version
         
         return {
             "system": {
@@ -163,7 +393,7 @@ async def get_system_info():
                 "num_threads": process.num_threads()
             },
             "python": {
-                "version": python_version,
+                "version": sys.version,
                 "implementation": sys.implementation.name
             }
         }
@@ -171,557 +401,54 @@ async def get_system_info():
         logger.error(f"System info error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/discord")
-async def get_discord_info():
-    """Get Discord connection and guild information with correct metrics."""
-    try:
-        bot = get_bot_instance()
-        if not bot:
-            return {"error": "Bot instance not available"}
-        
-        guilds_info = []
-        total_members = 0
-        
-        for guild in bot.guilds:
-            try:
-                # Get comprehensive guild-specific stats
-                guild_stats = music_manager.get_guild_stats(guild.id)
-                
-                # Get database info
-                with db_manager:
-                    db_guild = db_manager.get_guild_settings(guild.id)
-                
-                # Get recent activity for this guild
-                with db_manager:
-                    recent_usage = db_manager.session.query(Usage).filter(
-                        Usage.guild_id == guild.id,
-                        Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
-                    ).count()
-                
-                guild_info = {
-                    "id": str(guild.id),
-                    "name": guild.name,
-                    "member_count": guild.member_count,
-                    "owner": {
-                        "id": str(guild.owner.id) if guild.owner else None,
-                        "name": guild.owner.display_name if guild.owner else "Unknown"
-                    },
-                    "created_at": guild.created_at.isoformat(),
-                    "features": guild.features,
-                    "voice_connection": guild_stats['voice_connection'],
-                    "music": {
-                        "queue_length": guild_stats['queue_length'],
-                        "queue_duration": guild_stats['queue_duration'],
-                        "queue_duration_formatted": guild_stats['queue_duration_formatted'],
-                        "is_playing": guild_stats['is_playing'],
-                        "is_paused": guild_stats['is_paused'],
-                        "loop_state": guild_stats['loop_state'],
-                        "has_queue": guild_stats['has_queue'],
-                        "current_track": guild_stats['current_track'],
-                        "estimated_finish_time": guild_stats['estimated_finish_time']
-                    },
-                    "settings": {
-                        "max_queue_size": db_guild.max_queue_size if db_guild else settings.max_queue_size,
-                        "auto_disconnect_timeout": db_guild.auto_disconnect_timeout if db_guild else settings.idle_timeout,
-                        "bass_boost_enabled": db_guild.bass_boost_enabled if db_guild else settings.bass_boost_enabled,
-                        "dj_role_id": str(db_guild.dj_role_id) if db_guild and db_guild.dj_role_id else None,
-                        "prefix": db_guild.prefix if db_guild else settings.bot_prefix
-                    },
-                    "activity": {
-                        "last_activity": guild_stats['last_activity'],
-                        "last_activity_formatted": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(guild_stats['last_activity'])),
-                        "commands_24h": recent_usage,
-                        "minutes_since_activity": (time.time() - guild_stats['last_activity']) / 60
-                    }
-                }
-                
-                guilds_info.append(guild_info)
-                total_members += guild.member_count or 0
-                
-            except Exception as e:
-                logger.error(f"Error getting info for guild {guild.id}: {e}")
-                guilds_info.append({
-                    "id": str(guild.id),
-                    "name": guild.name,
-                    "member_count": guild.member_count or 0,
-                    "error": str(e)
-                })
-                total_members += guild.member_count or 0
-        
-        # Get comprehensive music manager metrics
-        music_metrics = music_manager.get_comprehensive_metrics()
-        
-        return {
-            "bot": {
-                "id": str(bot.user.id),
-                "username": bot.user.name,
-                "discriminator": bot.user.discriminator,
-                "avatar_url": str(bot.user.avatar.url) if bot.user.avatar else None,
-                "is_ready": bot.is_ready(),
-                "is_closed": bot.is_closed(),
-                "latency": bot.latency * 1000,  # Convert to ms
-                "uptime": time.time() - getattr(bot, 'startup_time', time.time()),
-                "shard_count": getattr(bot, 'shard_count', None)
-            },
-            "guilds": guilds_info,
-            "totals": {
-                "guild_count": len(bot.guilds),
-                "total_members": total_members,
-                "active_voice_connections": music_metrics['active_voice_connections'],
-                "connected_voice_clients": music_metrics['connected_voice_clients'],
-                "total_queued_tracks": music_metrics['total_queued_tracks'],
-                "currently_playing_sessions": music_metrics['currently_playing_sessions'],
-                "non_empty_queues": music_metrics['non_empty_queues']
-            },
-            "music_metrics": music_metrics
-        }
-    except Exception as e:
-        logger.error(f"Discord info error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/database")
-async def get_database_info():
-    """Get database statistics and connection info."""
-    try:
-        with db_manager:
-            # Basic table counts
-            guild_count = db_manager.session.query(Guild).count()
-            user_count = db_manager.session.query(User).count()
-            playlist_count = db_manager.session.query(Playlist).count()
-            song_count = db_manager.session.query(Song).count()
-            usage_count = db_manager.session.query(Usage).count()
-            
-            # Recent activity
-            recent_usage = db_manager.session.query(Usage).filter(
-                Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
-            ).count()
-            
-            # Database connection info
-            from sqlalchemy import text
-            try:
-                if settings.database_url.startswith("sqlite"):
-                    # SQLite version query
-                    db_version = db_manager.session.execute(text("SELECT sqlite_version()")).scalar()
-                    db_version = f"SQLite {db_version}"
-                elif settings.database_url.startswith("postgresql"):
-                    # PostgreSQL version query
-                    db_version = db_manager.session.execute(text("SELECT version()")).scalar()
-                else:
-                    # Generic fallback
-                    db_version = "Unknown database type"
-            except Exception as e:
-                logger.warning(f"Could not determine database version: {e}")
-                db_version = "Version unavailable"
-            
-        # Connection pool info (if applicable)
-        pool_info = {}
-        if hasattr(engine.pool, 'size'):
-            pool_info = {
-                "pool_size": engine.pool.size(),
-                "checked_in": engine.pool.checkedin(),
-                "checked_out": engine.pool.checkedout(),
-                "overflow": engine.pool.overflow(),
-                "invalid": engine.pool.invalidated()
-            }
-        
-        return {
-            "tables": {
-                "guilds": guild_count,
-                "users": user_count,
-                "playlists": playlist_count,
-                "songs": song_count,
-                "usage_logs": usage_count
-            },
-            "activity": {
-                "recent_usage_24h": recent_usage
-            },
-            "connection": {
-                "database_url": settings.database_url.split('@')[0] + '@***',  # Hide credentials
-                "version": db_version,
-                "pool_info": pool_info
-            }
-        }
-    except Exception as e:
-        logger.error(f"Database info error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/errors")
-async def get_error_info():
-    """Get error logs and statistics."""
-    try:
-        bot = get_bot_instance()
-        error_info = {
-            "total_errors": 0,
-            "recent_errors": [],
-            "error_types": {},
-            "error_rate": 0
-        }
-        
-        if bot and hasattr(bot, 'error_handler'):
-            error_handler = bot.error_handler
-            error_info.update({
-                "total_errors": getattr(error_handler, 'error_count', 0),
-                "recent_errors": getattr(error_handler, 'recent_errors', [])[-50:],  # Last 50 errors
-                "error_rate": len(getattr(error_handler, 'recent_errors', [])) / max(1, 
-                    (time.time() - getattr(bot, 'startup_time', time.time())) / 3600)  # Errors per hour
-            })
-            
-            # Count error types
-            for error in getattr(error_handler, 'recent_errors', []):
-                error_type = error.get('error_type', 'Unknown')
-                error_info['error_types'][error_type] = error_info['error_types'].get(error_type, 0) + 1
-        
-        return error_info
-    except Exception as e:
-        logger.error(f"Error info error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/performance")
-async def get_performance_metrics():
-    """Get performance metrics and statistics."""
-    try:
-        # Music manager metrics
-        music_metrics = music_manager.get_metrics()
-        
-        # Command usage statistics
-        with db_manager:
-            # Recent command usage (last 24 hours)
-            recent_commands = db_manager.session.query(Usage).filter(
-                Usage.timestamp >= datetime.utcnow() - timedelta(hours=24)
-            ).all()
-            
-            # Command success rate
-            total_commands = len(recent_commands)
-            successful_commands = len([c for c in recent_commands if c.success])
-            success_rate = (successful_commands / max(1, total_commands)) * 100
-            
-            # Average execution time
-            execution_times = [c.execution_time for c in recent_commands if c.execution_time]
-            avg_execution_time = sum(execution_times) / max(1, len(execution_times))
-            
-            # Popular commands
-            command_counts = {}
-            for command in recent_commands:
-                command_counts[command.command_name] = command_counts.get(command.command_name, 0) + 1
-            
-            popular_commands = sorted(command_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        return {
-            "music": music_metrics,
-            "commands": {
-                "total_24h": total_commands,
-                "success_rate": success_rate,
-                "avg_execution_time": avg_execution_time,
-                "popular_commands": popular_commands
-            },
-            "cache": {
-                "search_cache_size": len(getattr(music_manager, 'search_results', {}))
-            }
-        }
-    except Exception as e:
-        logger.error(f"Performance metrics error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/troubleshooting")
-async def get_troubleshooting_info():
-    """Get troubleshooting information and diagnostics."""
-    try:
-        bot = get_bot_instance()
-        issues = []
-        recommendations = []
-        
-        # Check common issues
-        if bot:
-            # High latency check
-            if bot.latency > 0.5:  # 500ms
-                issues.append({
-                    "type": "warning",
-                    "title": "High Discord Latency",
-                    "description": f"Current latency: {bot.latency*1000:.0f}ms",
-                    "recommendation": "Check network connection and Discord API status"
-                })
-            
-            # Check for stale voice connections
-            stale_connections = []
-            current_time = time.time()
-            for guild_id, last_activity in music_manager.last_activity.items():
-                if current_time - last_activity > 3600:  # 1 hour
-                    stale_connections.append(guild_id)
-            
-            if stale_connections:
-                issues.append({
-                    "type": "warning",
-                    "title": "Stale Voice Connections",
-                    "description": f"{len(stale_connections)} connections inactive for >1 hour",
-                    "recommendation": "Consider implementing automatic cleanup"
-                })
-        
-        # System resource checks
-        memory = psutil.virtual_memory()
-        if memory.percent > 85:
-            issues.append({
-                "type": "critical",
-                "title": "High Memory Usage",
-                "description": f"System memory usage: {memory.percent:.1f}%",
-                "recommendation": "Consider restarting the bot or increasing system memory"
-            })
-        
-        cpu_percent = psutil.cpu_percent(interval=1)
-        if cpu_percent > 80:
-            issues.append({
-                "type": "warning",
-                "title": "High CPU Usage",
-                "description": f"CPU usage: {cpu_percent:.1f}%",
-                "recommendation": "Check for resource-intensive operations"
-            })
-        
-        # Database connection check
+# Background task to send periodic updates
+async def background_updates():
+    """Send periodic updates to all connected WebSocket clients."""
+    while True:
         try:
-            with db_manager:
-                from sqlalchemy import text
-                db_manager.session.execute(text("SELECT 1"))
+            # Clean up stale connections
+            manager.cleanup_stale_connections()
+            
+            # Send updates if there are active connections
+            if manager.active_connections:
+                stats = await get_comprehensive_stats()
+                await manager.broadcast({
+                    "type": "update",
+                    "data": stats
+                })
+            
+            await asyncio.sleep(5)  # Update every 5 seconds
+            
         except Exception as e:
-            issues.append({
-                "type": "critical",
-                "title": "Database Connection Issue",
-                "description": str(e),
-                "recommendation": "Check database server status and connection settings"
-            })
-        
-        # General recommendations
-        if not issues:
-            recommendations.append("System is running smoothly! Consider enabling more detailed monitoring.")
-        else:
-            recommendations.append("Address critical issues first, then warnings.")
-            recommendations.append("Monitor system resources regularly.")
-            recommendations.append("Check Discord API status if experiencing connection issues.")
-        
-        return {
-            "issues": issues,
-            "recommendations": recommendations,
-            "system_health": "healthy" if not any(i["type"] == "critical" for i in issues) else "degraded",
-            "last_check": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Troubleshooting info error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/music/detailed")
-async def get_detailed_music_info():
-    """Get detailed music system information."""
-    try:
-        detailed_info = {}
-        
-        for guild_id in music_manager.voice_clients.keys():
-            guild_stats = music_manager.get_guild_stats(guild_id)
-            queue = music_manager.get_queue(guild_id)
-            
-            # Get guild name
-            bot = get_bot_instance()
-            guild_name = "Unknown"
-            if bot:
-                guild = bot.get_guild(guild_id)
-                if guild:
-                    guild_name = guild.name
-            
-            detailed_info[str(guild_id)] = {
-                "guild_name": guild_name,
-                "stats": guild_stats,
-                "queue_tracks": [
-                    {
-                        "title": track.title,
-                        "duration": track.duration,
-                        "duration_formatted": music_manager._format_duration(track.duration) if track.duration else "Unknown",
-                        "requested_by": track.requested_by.display_name,
-                        "added_at": track.added_at,
-                        "url": track.url,
-                        "thumbnail": track.thumbnail
-                    }
-                    for track in queue[:10]  # Limit to first 10 tracks
-                ],
-                "queue_summary": {
-                    "total_tracks": len(queue),
-                    "showing_tracks": min(len(queue), 10),
-                    "total_duration": sum(track.duration for track in queue if track.duration),
-                    "estimated_finish": time.time() + sum(track.duration for track in queue if track.duration) if queue else None
-                }
-            }
-        
-        return {
-            "detailed_guilds": detailed_info,
-            "summary": music_manager.get_comprehensive_metrics(),
-            "timestamp": time.time()
-        }
-        
-    except Exception as e:
-        logger.error(f"Detailed music info error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def get_comprehensive_stats():
-    """Get all dashboard statistics with corrected metrics."""
-    try:
-        # Get comprehensive music metrics first
-        music_metrics = music_manager.get_comprehensive_metrics()
-        
-        # Run all stat gathering concurrently
-        system_task = get_system_info()
-        discord_task = get_discord_info()
-        database_task = get_database_info()
-        performance_task = get_performance_metrics()
-        error_task = get_error_info()
-        troubleshooting_task = get_troubleshooting_info()
-        
-        system_info, discord_info, db_info, perf_info, error_info, troubleshoot_info = await asyncio.gather(
-            system_task, discord_task, database_task, performance_task, error_task, troubleshooting_task,
-            return_exceptions=True
-        )
-        
-        # Handle any exceptions
-        def safe_result(result, default={}):
-            return result if not isinstance(result, Exception) else {"error": str(result), **default}
-        
-        # Calculate additional derived metrics
-        bot = get_bot_instance()
-        uptime = time.time() - getattr(bot, 'startup_time', time.time()) if bot else 0
-        
-        # Guild activity analysis
-        active_guilds = music_metrics['active_guilds_1h']
-        total_guilds = discord_info.get('totals', {}).get('guild_count', 0) if not isinstance(discord_info, Exception) else 0
-        activity_rate = (active_guilds / max(1, total_guilds)) * 100
-        
-        return {
-            "timestamp": datetime.utcnow().isoformat(),
-            "uptime": uptime,
-            "system": safe_result(system_info),
-            "discord": safe_result(discord_info),
-            "database": safe_result(db_info),
-            "performance": safe_result(perf_info),
-            "errors": safe_result(error_info),
-            "troubleshooting": safe_result(troubleshoot_info),
-            "music_comprehensive": music_metrics,
-            "derived_metrics": {
-                "guild_activity_rate": activity_rate,
-                "avg_members_per_guild": (discord_info.get('totals', {}).get('total_members', 0) / max(1, total_guilds)) if not isinstance(discord_info, Exception) else 0,
-                "voice_connection_rate": (music_metrics['connected_voice_clients'] / max(1, total_guilds)) * 100,
-                "music_engagement_rate": (music_metrics['currently_playing_sessions'] / max(1, total_guilds)) * 100,
-                "avg_queue_efficiency": music_metrics['avg_queue_size'],
-                "system_health_score": calculate_health_score(system_info, discord_info, music_metrics)
-            }
-        }
-    except Exception as e:
-        logger.error(f"Comprehensive stats error: {e}")
-        return {"error": str(e), "timestamp": datetime.utcnow().isoformat()}
-
-def calculate_health_score(system_info, discord_info, music_metrics):
-    """Calculate an overall system health score (0-100)."""
-    try:
-        score = 100
-        
-        # System resource penalties
-        if not isinstance(system_info, Exception) and 'system' in system_info:
-            cpu_percent = system_info['system'].get('cpu_percent', 0)
-            memory_percent = system_info['system'].get('memory', {}).get('percent', 0)
-            
-            if cpu_percent > 80:
-                score -= 20
-            elif cpu_percent > 60:
-                score -= 10
-                
-            if memory_percent > 85:
-                score -= 20
-            elif memory_percent > 70:
-                score -= 10
-        
-        # Discord connection penalties
-        if not isinstance(discord_info, Exception) and 'bot' in discord_info:
-            if not discord_info['bot'].get('is_ready', False):
-                score -= 30
-            if discord_info['bot'].get('latency', 0) > 500:  # 500ms
-                score -= 15
-            elif discord_info['bot'].get('latency', 0) > 200:  # 200ms
-                score -= 5
-        
-        # Music system penalties
-        connection_rate = music_metrics.get('connection_success_rate', 100)
-        if connection_rate < 90:
-            score -= 15
-        elif connection_rate < 95:
-            score -= 5
-        
-        # Error rate penalties
-        total_operations = music_metrics.get('songs_played_total', 0) + music_metrics.get('queue_adds_total', 0)
-        if total_operations > 0:
-            error_rate = (music_metrics.get('errors_total', 0) / total_operations) * 100
-            if error_rate > 10:
-                score -= 20
-            elif error_rate > 5:
-                score -= 10
-        
-        return max(0, min(100, score))
-        
-    except Exception:
-        return 50  # Default neutral score on calculation error
-
-async def basic_health_check():
-    """Basic health check when health monitor is not available."""
-    try:
-        # Test database
-        with db_manager:
-            from sqlalchemy import text
-            db_manager.session.execute(text("SELECT 1"))
-        
-        return {
-            "status": "healthy",
-            "message": "Basic health check passed",
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": "2.0.0"
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "message": f"Health check failed: {str(e)}",
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-def get_bot_instance():
-    """Get the bot instance from the global scope."""
-    try:
-        # This would need to be set when starting the dashboard
-        import sys
-        for name, obj in sys.modules.items():
-            if hasattr(obj, 'bot') and hasattr(obj.bot, 'user'):
-                return obj.bot
-        return None
-    except Exception:
-        return None
+            logger.error(f"Background update error: {e}")
+            await asyncio.sleep(10)
 
 async def start_dashboard(bot):
-    """Start the dashboard server with bot instance."""
-    import uvicorn
-    
-    # Store bot instance globally for access
+    """Start the dashboard server with proper WebSocket support."""
     global _bot_instance
     _bot_instance = bot
     
-    # Start health monitoring
-    health_monitor = get_health_monitor(bot)
-    if health_monitor and settings.health_check_enabled:
-        asyncio.create_task(health_monitor.start_monitoring())
+    # Only start dashboard on designated shard
+    if not settings.should_start_dashboard:
+        logger.info("Dashboard not started on this shard")
+        return
     
-    # Configure and start the server
+    # Start background update task
+    asyncio.create_task(background_updates())
+    
     config = uvicorn.Config(
-        app=app,
+        app,
         host=settings.dashboard_host,
         port=settings.dashboard_port,
-        log_level="info"
+        log_level="warning",  # Reduce console noise
+        access_log=False
     )
     
     server = uvicorn.Server(config)
-    await server.serve()
-
-# Make bot instance accessible
-_bot_instance = None
-
-def get_bot_instance():
-    """Get the stored bot instance."""
-    return _bot_instance
+    
+    # Start server in background task
+    asyncio.create_task(server.serve())
+    logger.info(f"Dashboard started on {settings.dashboard_host}:{settings.dashboard_port}")
+    
+    if hasattr(bot, 'shard_count') and bot.shard_count:
+        logger.info(f"Dashboard managing {bot.shard_count} shards")
