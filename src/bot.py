@@ -1,10 +1,11 @@
+# src/bot.py - Complete Discord Bot with Comprehensive Monitoring Integration
+
 import asyncio
 import logging
 import sys
 import traceback
 from pathlib import Path
 import time
-import locale
 
 import discord
 from discord.ext import commands, tasks
@@ -27,17 +28,11 @@ from src.commands.utility_commands import UtilityCommands
 
 # Import monitoring
 from src.monitoring.health import get_health_monitor
-from src.web.dashboard import start_dashboard
+from src.web.dashboard import start_dashboard, set_bot_instance
+from src.monitoring.metrics_tracker import BotMetricsTracker
 
-# Fix Unicode issues on Windows
-if sys.platform == "win32":
-    import codecs
-    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
-    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
-
-
-class ShardedBasslineBot(commands.AutoShardedBot):
-    """Enhanced Discord music bot with automatic sharding support."""
+class ShardedBasslineBot(commands.Bot):
+    """Enhanced Discord music bot with professional features and comprehensive monitoring."""
     
     def __init__(self, shard_id=None, shard_count=None):
         # Bot intents
@@ -49,6 +44,7 @@ class ShardedBasslineBot(commands.AutoShardedBot):
         
         # Initialize startup time and error tracking BEFORE super().__init__
         self.startup_time = time.time()
+        self._start_time = time.time()  # For dashboard tracking
         self.error_count = 0
         self.recent_errors = []
         
@@ -75,11 +71,15 @@ class ShardedBasslineBot(commands.AutoShardedBot):
         self.ready_guilds = set()
         self.shard_ready_events = {}
         
+        # Initialize metrics tracker
+        self.metrics_tracker = BotMetricsTracker(self)
+        
         # Track which shards are ready
-        for shard_id in self.shard_ids or [0]:
+        shard_ids = getattr(self, 'shard_ids', None) or [0]
+        for shard_id in shard_ids:
             self.shard_ready_events[shard_id] = asyncio.Event()
         
-        logger.info(f"Initializing {settings.bot_name} with sharding")
+        logger.info(f"Initializing {settings.bot_name} with comprehensive monitoring")
         if self.shard_count:
             logger.info(f"Shard configuration: {self.shard_id}/{self.shard_count}")
     
@@ -96,270 +96,221 @@ class ShardedBasslineBot(commands.AutoShardedBot):
     
     async def setup_hook(self):
         """Set up the bot - called once when bot starts."""
-        logger.info(f"Setting up bot with {len(self.shard_ids or [0])} shard(s)...")
+        logger.info("Setting up bot with comprehensive monitoring...")
+        
+        # Initialize database
         try:
-            # Initialize database (only once, not per shard)
-            init_db()
+            init_db()  # Remove await since init_db() is not async
             logger.info("Database initialized")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            raise
+        
+        # Load command modules (cogs)
+        try:
+            await self.add_cog(MusicCommands(self))
+            logger.info("Loaded cog: MusicCommands")
             
-            # Load extensions
-            await self.load_cogs()
+            await self.add_cog(PlaylistCommands(self))
+            logger.info("Loaded cog: PlaylistCommands")
             
-            # Sync slash commands globally (will be handled by Discord across shards)
-            await self.tree.sync()
-            logger.info("Slash commands synced")
+            await self.add_cog(AdminCommands(self))
+            logger.info("Loaded cog: AdminCommands")
             
-            # Start background tasks
-            self.cleanup_task.start()
-            if settings.metrics_enabled:
-                self.metrics_task.start()
-            
-            logger.info("Bot setup completed successfully")
+            await self.add_cog(UtilityCommands(self))
+            logger.info("Loaded cog: UtilityCommands")
             
         except Exception as e:
-            logger.error(f"Failed to set up bot: {e}")
-            traceback.print_exc()
-            sys.exit(1)
-    
-    async def load_cogs(self):
-        """Load all command cogs."""
-        cogs = [
-            ('MusicCommands', MusicCommands),
-            ('PlaylistCommands', PlaylistCommands),
-            ('AdminCommands', AdminCommands),
-            ('UtilityCommands', UtilityCommands),
-        ]
+            logger.error(f"Failed to load cogs: {e}")
+            raise
         
-        for name, cog_class in cogs:
-            try:
-                await self.add_cog(cog_class(self))
-                logger.info(f"Loaded cog: {name}")
-            except Exception as e:
-                logger.error(f"Failed to load cog {name}: {e}")
-                traceback.print_exc()
+        # Add comprehensive metrics event listeners
+        try:
+            # Core metrics events
+            self.add_listener(self.metrics_tracker.on_ready, 'on_ready')
+            self.add_listener(self.metrics_tracker.on_command, 'on_command')
+            self.add_listener(self.metrics_tracker.on_command_completion, 'on_command_completion')
+            self.add_listener(self.metrics_tracker.on_command_error, 'on_command_error')
+            
+            # Voice and music tracking
+            self.add_listener(self.metrics_tracker.on_voice_state_update, 'on_voice_state_update')
+            
+            # Guild tracking
+            self.add_listener(self.metrics_tracker.on_guild_join, 'on_guild_join')
+            self.add_listener(self.metrics_tracker.on_guild_remove, 'on_guild_remove')
+            
+            # Connection tracking
+            self.add_listener(self.metrics_tracker.on_message, 'on_message')
+            self.add_listener(self.metrics_tracker.on_disconnect, 'on_disconnect')
+            self.add_listener(self.metrics_tracker.on_resumed, 'on_resumed')
+            
+            logger.info("[SUCCESS] Comprehensive dashboard metrics tracking enabled")
+            
+        except Exception as e:
+            logger.error(f"Failed to setup metrics tracking: {e}")
+        
+        # Sync slash commands
+        try:
+            await self.tree.sync()
+            logger.info("Slash commands synced")
+        except Exception as e:
+            logger.error(f"Failed to sync slash commands: {e}")
+        
+        # Start periodic stats logging
+        try:
+            asyncio.create_task(self.metrics_tracker.periodic_stats_log())
+            logger.info("Started periodic statistics logging")
+        except Exception as e:
+            logger.error(f"Failed to start periodic stats: {e}")
+        
+        logger.info("Bot setup completed successfully")
     
     async def on_ready(self):
-        """Called when a shard becomes ready."""
-        # Note: This is called for EACH shard when it becomes ready
-        shard_id = getattr(self, 'shard_id', 0) or 0
+        """Called when the bot is ready."""
+        shard_id = getattr(self, 'shard_id', None)
+        if shard_id is None:
+            shard_id = 0  # Default for non-sharded bots
         
-        logger.info(f"[SHARD {shard_id}] Ready! Shard latency: {self.get_shard(shard_id).latency * 1000:.2f}ms")
-        
-        # Mark this shard as ready
-        if shard_id in self.shard_ready_events:
-            self.shard_ready_events[shard_id].set()
+        if shard_id not in self.ready_guilds:
+            self.ready_guilds.add(shard_id)
+            
+            # Log shard ready information
+            if self.shard_count:
+                guild_count = len([g for g in self.guilds if g.shard_id == shard_id])
+                latency = round(self.get_shard(shard_id).latency * 1000, 1)
+            else:
+                guild_count = len(self.guilds)
+                latency = round(self.latency * 1000, 1)
+            
+            logger.info(f"[SHARD {shard_id}] Connected to Discord")
         
         # Check if all shards are ready
-        all_ready = all(
-            event.is_set() 
-            for event in self.shard_ready_events.values()
-        )
-        
-        if all_ready and not hasattr(self, '_all_shards_ready'):
-            self._all_shards_ready = True
-            await self._on_all_shards_ready()
+        expected_shards = self.shard_count or 1
+        if len(self.ready_guilds) >= expected_shards:
+            logger.info(f"[SHARD {shard_id}] Connected to {len(self.guilds)} guilds")
+            logger.info(f"[SHARD {shard_id}] Latency: {round(self.latency * 1000, 1)}ms")
+            logger.info(f"[SHARD {shard_id}] Ready! Shard latency: {round(self.latency * 1000, 1)}ms")
+            
+            # Log comprehensive stats when all shards are ready
+            if len(self.ready_guilds) == expected_shards:
+                await self._log_startup_complete()
     
-    async def _on_all_shards_ready(self):
-        """Called when ALL shards are ready."""
-        total_guilds = len(self.guilds)
-        total_users = sum(g.member_count for g in self.guilds)
-        
-        logger.info(f"[SUCCESS] All shards ready! {self.user.name} is fully online!")
-        logger.info(f"[STATS] Total guilds: {total_guilds}")
-        logger.info(f"[STATS] Total users: {total_users}")
-        logger.info(f"[STATS] Shard count: {self.shard_count}")
-        
-        # Log per-shard statistics
-        for shard_id, shard in self.shards.items():
-            shard_guilds = [g for g in self.guilds if g.shard_id == shard_id]
-            logger.info(f"[SHARD {shard_id}] Guilds: {len(shard_guilds)}, Latency: {shard.latency * 1000:.2f}ms")
-        
-        # Start web dashboard only when all shards are ready
-        if settings.dashboard_enabled:
-            await self.start_dashboard()
-        
-        # Initialize health monitoring for all shards
-        health_monitor = get_health_monitor(self)
-        if health_monitor and settings.health_check_enabled:
-            logger.info("Starting health monitoring for all shards...")
-            asyncio.create_task(health_monitor.start_monitoring())
+    async def _log_startup_complete(self):
+        """Log comprehensive startup completion statistics."""
+        try:
+            total_guilds = len(self.guilds)
+            total_users = sum(getattr(g, 'member_count', 0) for g in self.guilds)
+            shard_count = self.shard_count or 1
+            
+            logger.info("[SUCCESS] All shards ready! BasslineBot is fully online!")
+            logger.info(f"[STATS] Total guilds: {total_guilds:,}")
+            logger.info(f"[STATS] Total users: {total_users:,}")
+            logger.info(f"[STATS] Shard count: {shard_count}")
+            
+            # Log per-shard statistics only if actually sharded
+            if self.shard_count and self.shard_count > 1:
+                for shard_id in range(shard_count):
+                    try:
+                        shard_guilds = [g for g in self.guilds if getattr(g, 'shard_id', 0) == shard_id]
+                        shard_latency = round(self.get_shard(shard_id).latency * 1000, 1)
+                        logger.info(f"[SHARD {shard_id}] Guilds: {len(shard_guilds)}, Latency: {shard_latency}ms")
+                    except Exception as e:
+                        logger.warning(f"[SHARD {shard_id}] Could not get shard metrics: {e}")
+            
+            # Start dashboard if this is the primary shard or non-sharded
+            primary_shard = getattr(self, 'shard_id', None)
+            if primary_shard is None or primary_shard == 0:
+                try:
+                    await start_dashboard(self)
+                    logger.info(f"Dashboard started on port {getattr(settings, 'dashboard_port', 8080)}")
+                except Exception as e:
+                    logger.error(f"Failed to start dashboard: {e}")
+            
+            # Start health monitoring
+            try:
+                health_monitor = get_health_monitor(self)
+                if health_monitor and getattr(settings, 'health_check_enabled', True):
+                    logger.info("Starting health monitoring for all shards...")
+                    asyncio.create_task(health_monitor.start_monitoring())
+                
+            except Exception as e:
+                logger.error(f"Failed to start health monitoring: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error in startup completion logging: {e}")
     
     async def on_shard_ready(self, shard_id):
         """Called when a specific shard becomes ready."""
-        shard = self.get_shard(shard_id)
-        shard_guilds = [g for g in self.guilds if g.shard_id == shard_id]
-        
-        logger.info(f"[SHARD {shard_id}] Connected to {len(shard_guilds)} guilds")
-        logger.info(f"[SHARD {shard_id}] Latency: {shard.latency * 1000:.2f}ms")
-    
-    async def on_shard_connect(self, shard_id):
-        """Called when a shard connects to Discord."""
-        logger.info(f"[SHARD {shard_id}] Connected to Discord")
-    
-    async def on_shard_disconnect(self, shard_id):
-        """Called when a shard disconnects from Discord."""
-        logger.warning(f"[SHARD {shard_id}] Disconnected from Discord")
-    
-    async def on_shard_resumed(self, shard_id):
-        """Called when a shard resumes connection."""
-        logger.info(f"[SHARD {shard_id}] Resumed connection")
-    
-    async def on_guild_join(self, guild: discord.Guild):
-        """Called when bot joins a guild."""
-        shard_id = guild.shard_id
-        logger.info(f"[SHARD {shard_id}] Joined guild: {guild.name} ({guild.id})")
-        
-        # Create guild record in database
-        with db_manager:
-            db_manager.get_or_create_guild(guild.id, guild.name)
-        
-        # Send welcome message
-        if guild.system_channel:
-            embed = discord.Embed(
-                title=f"{settings.bot_name} has joined!",
-                description="Thank you for adding me to your server!",
-                color=discord.Color.green()
-            )
-            embed.add_field(
-                name="Getting Started",
-                value="Use `/play <song>` to start playing music!\nUse `/help` for all commands.",
-                inline=False
-            )
-            embed.add_field(
-                name="Powered by Sharding",
-                value=f"Running on shard {shard_id} for optimal performance!",
-                inline=False
-            )
+        try:
+            if shard_id in self.shard_ready_events:
+                self.shard_ready_events[shard_id].set()
             
-            try:
-                await guild.system_channel.send(embed=embed)
-            except discord.Forbidden:
-                pass
-    
-    async def on_guild_remove(self, guild: discord.Guild):
-        """Called when bot leaves a guild."""
-        shard_id = guild.shard_id
-        logger.info(f"[SHARD {shard_id}] Left guild: {guild.name} ({guild.id})")
-        
-        # Clean up guild state
-        music_manager.clear_guild_state(guild.id)
-    
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """Handle voice state updates."""
-        if member.id != self.user.id:
-            return
-        
-        guild_id = member.guild.id
-        shard_id = member.guild.shard_id
-        
-        # Bot was disconnected
-        if before.channel and not after.channel:
-            logger.info(f"[SHARD {shard_id}] Bot disconnected from voice in guild {guild_id}")
-            music_manager.clear_guild_state(guild_id)
-        
-        # Bot moved channels
-        elif before.channel != after.channel and after.channel:
-            logger.info(f"[SHARD {shard_id}] Bot moved to {after.channel.name} in guild {guild_id}")
-    
-    async def on_command_error(self, ctx: commands.Context, error: Exception):
-        """Handle command errors."""
-        shard_id = ctx.guild.shard_id if ctx.guild else "DM"
-        logger.error(f"[SHARD {shard_id}] Command error in {ctx.command}: {error}")
-        
-        self.error_count += 1
-        self.recent_errors.append({
-            'error': str(error),
-            'command': str(ctx.command),
-            'guild_id': ctx.guild.id if ctx.guild else None,
-            'shard_id': shard_id,
-            'timestamp': time.time()
-        })
-        
-        # Keep only recent errors (last 10)
-        self.recent_errors = self.recent_errors[-10:]
-        
-        await self.error_handler.handle_error(ctx, error)
-    
-    def get_shard_info(self):
-        """Get comprehensive shard information."""
-        if not self.shards:
-            return None
-        
-        shard_info = {
-            'shard_count': self.shard_count,
-            'shards': {}
-        }
-        
-        for shard_id, shard in self.shards.items():
-            shard_guilds = [g for g in self.guilds if g.shard_id == shard_id]
-            shard_users = sum(g.member_count for g in shard_guilds)
-            
-            shard_info['shards'][shard_id] = {
-                'id': shard_id,
-                'latency': round(shard.latency * 1000, 2),
-                'is_ready': not shard.is_closed(),
-                'guild_count': len(shard_guilds),
-                'user_count': shard_users,
-                'is_ws_ratelimited': shard.is_ws_ratelimited(),
-            }
-        
-        return shard_info
-    
-    async def start_dashboard(self):
-        """Start the web dashboard with shard support."""
-        try:
-            # Only start dashboard on the first shard to avoid conflicts
-            if self.shard_id is None or self.shard_id == 0:
-                await start_dashboard(self)
-                logger.info(f"Dashboard started on port {settings.dashboard_port}")
-            else:
-                logger.info(f"[SHARD {self.shard_id}] Dashboard not started (handled by shard 0)")
-        except Exception as e:
-            logger.error(f"Failed to start dashboard: {e}")
-    
-    @tasks.loop(minutes=5)
-    async def cleanup_task(self):
-        """Periodic cleanup task."""
-        try:
-            # Clean up inactive voice connections
-            for guild in self.guilds:
-                if guild.voice_client and not guild.voice_client.is_playing():
-                    # Check if queue is empty and no one is in channel
-                    voice_channel = guild.voice_client.channel
-                    if voice_channel and len(voice_channel.members) <= 1:  # Only bot
-                        await guild.voice_client.disconnect()
-                        music_manager.clear_guild_state(guild.id)
-                        logger.info(f"[SHARD {guild.shard_id}] Cleaned up inactive connection in {guild.name}")
-        except Exception as e:
-            logger.error(f"Cleanup task error: {e}")
-    
-    @tasks.loop(minutes=1)
-    async def metrics_task(self):
-        """Collect metrics for monitoring."""
-        try:
-            # Collect shard-specific metrics
-            for shard_id, shard in self.shards.items():
-                shard_guilds = [g for g in self.guilds if g.shard_id == shard_id]
+            # Only collect shard-specific metrics if we're actually sharded
+            if self.shard_count and self.shard_count > 1:
+                # Collect shard-specific metrics
+                shard_guilds = [g for g in self.guilds if getattr(g, 'shard_id', 0) == shard_id]
                 
                 metrics = {
                     'shard_id': shard_id,
-                    'latency': shard.latency,
+                    'latency': self.get_shard(shard_id).latency if hasattr(self, 'get_shard') else self.latency,
                     'guild_count': len(shard_guilds),
-                    'user_count': sum(g.member_count for g in shard_guilds),
-                    'active_connections': len([g for g in shard_guilds if g.voice_client]),
+                    'user_count': sum(getattr(g, 'member_count', 0) for g in shard_guilds),
+                    'active_connections': len([g for g in shard_guilds if getattr(g, 'voice_client', None)]),
                     'timestamp': time.time()
                 }
                 
-                # Store metrics (implement your metrics storage here)
-                # self.store_shard_metrics(metrics)
-                
+                logger.debug(f"Shard {shard_id} metrics: {metrics}")
+            
         except Exception as e:
-            logger.error(f"Metrics collection error: {e}")
+            logger.error(f"Shard ready metrics collection error: {e}")
+    
+    async def close(self):
+        """Enhanced cleanup when bot shuts down."""
+        try:
+            logger.info("Starting bot shutdown sequence...")
+            
+            # Log session statistics
+            if hasattr(self, 'metrics_tracker'):
+                stats = self.metrics_tracker.get_session_stats()
+                logger.info("📊 Final Session Statistics:")
+                for key, value in stats.items():
+                    logger.info(f"   {key}: {value}")
+            
+            # Disconnect from all voice channels
+            voice_clients = [vc for vc in self.voice_clients if vc.is_connected()]
+            if voice_clients:
+                logger.info(f"Disconnecting from {len(voice_clients)} voice channels...")
+                for vc in voice_clients:
+                    try:
+                        await vc.disconnect(force=True)
+                    except:
+                        pass
+            
+            # Close database connections
+            if db_manager:
+                try:
+                    await db_manager.close()
+                    logger.info("Database connections closed")
+                except:
+                    pass
+            
+            logger.info("Bot shutdown sequence completed")
+            
+        except Exception as e:
+            logger.error(f"Error during bot shutdown: {e}")
+        
+        finally:
+            await super().close()
 
+# Legacy class for backwards compatibility
+class BasslineBot(ShardedBasslineBot):
+    """Legacy class name for backwards compatibility."""
+    def __init__(self):
+        super().__init__()
 
-# Main bot instance
+# Main bot instance creation
 async def create_bot():
-    """Create and return the bot instance."""
+    """Create and return the bot instance with comprehensive monitoring."""
     # Check if manual sharding is configured
     shard_id = getattr(settings, 'shard_id', None)
     shard_count = getattr(settings, 'shard_count', None)
@@ -373,36 +324,57 @@ async def create_bot():
         logger.info("Using automatic sharding")
         bot = ShardedBasslineBot()
     
+    # Dashboard integration - set bot instance and track start time
+    bot._start_time = time.time()  # Track when bot starts
+    set_bot_instance(bot)  # Give dashboard access to bot
+    logger.info("Bot instance configured for comprehensive dashboard monitoring")
+    
     return bot
 
-
 async def main():
-    """Main bot entry point."""
+    """Main bot entry point with enhanced error handling."""
+    # Ensure required directories exist
+    directories = ['logs', 'data', 'downloads', 'static', 'templates']
+    for directory in directories:
+        Path(directory).mkdir(exist_ok=True)
+    
     try:
+        logger.info(f"Starting Bassline-Bot with comprehensive monitoring system...")
+        
+        # Create bot instance
         bot = await create_bot()
         
         # Start the bot
         async with bot:
             await bot.start(settings.discord_token)
             
+    except discord.LoginFailure:
+        logger.error("[ERROR] Invalid Discord token provided - check your .env file")
+        sys.exit(1)
+    except discord.PrivilegedIntentsRequired:
+        logger.error("[ERROR] Privileged intents required - enable them in Discord Developer Portal")
+        sys.exit(1)
     except KeyboardInterrupt:
-        logger.info("Bot shutdown requested by user")
+        logger.info("[STOP] Bot shutdown requested by user")
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        traceback.print_exc()
+        logger.error(f"[FATAL] Fatal error during bot execution: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        sys.exit(1)
     finally:
-        logger.info("Bot shutdown complete")
+        logger.info("[SHUTDOWN] Bot shutdown complete")
 
-
+# Entry point
 if __name__ == "__main__":
-    # Set up asyncio for Windows
+    # Set up asyncio for Windows compatibility
     if sys.platform == 'win32':
+        # Use ProactorEventLoop on Windows for better performance
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     
     try:
+        # Run the bot
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        logger.info("[STOP] Bot stopped by user")
     except Exception as e:
-        logger.error(f"Failed to start bot: {e}")
+        logger.error(f"[FATAL] Failed to start bot: {e}")
         sys.exit(1)

@@ -576,6 +576,348 @@ async function loadServersData() {
     }
 }
 
+async function loadServerOverview() {
+    const container = document.getElementById('server-overview');
+    if (!container) return;
+    
+    try {
+        const data = await dashboardCore.fetchData('/api/server-overview');
+        
+        const html = `
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-server"></i>
+                    Total Servers
+                </span>
+                <span class="metric-value">
+                    ${data.total_servers || 0}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-users"></i>
+                    Total Members
+                </span>
+                <span class="metric-value">
+                    ${(data.total_members || 0).toLocaleString()}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-volume-up"></i>
+                    Active Voice
+                </span>
+                <span class="metric-value">
+                    ${data.active_voice || 0}
+                </span>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="error-item">
+                <strong>Failed to load server overview</strong><br>
+                <small>${dashboardCore.escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+// Load music activity data for the overview tab
+async function loadMusicActivity() {
+    const container = document.getElementById('music-activity');
+    if (!container) return;
+    
+    try {
+        const data = await dashboardCore.fetchData('/api/music/activity');
+        
+        const current = data.current_activity || {};
+        const html = `
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-play"></i>
+                    Active Players
+                </span>
+                <span class="metric-value">
+                    ${current.active_players || 0}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-headphones"></i>
+                    Current Listeners
+                </span>
+                <span class="metric-value">
+                    ${current.current_listeners || 0}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-music"></i>
+                    Songs Today
+                </span>
+                <span class="metric-value">
+                    ${current.songs_played_today || 0}
+                </span>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="error-item">
+                <strong>Failed to load music activity</strong><br>
+                <small>${dashboardCore.escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+// Load recent issues for the overview tab
+async function loadRecentIssues() {
+    const container = document.getElementById('recent-issues');
+    if (!container) return;
+    
+    try {
+        const data = await dashboardCore.fetchData('/api/recent-issues');
+        
+        const errors = data.recent_errors || [];
+        
+        if (errors.length === 0 || (errors.length === 1 && errors[0].type === 'No Issues')) {
+            container.innerHTML = `
+                <div class="recommendation">
+                    <i class="fas fa-check-circle"></i>
+                    <span>No recent issues detected</span>
+                </div>
+            `;
+            return;
+        }
+        
+        const html = errors.map(error => `
+            <div class="error-item ${error.severity}">
+                <div class="error-header">
+                    <i class="fas fa-${error.severity === 'critical' ? 'exclamation-circle' : 'exclamation-triangle'}"></i>
+                    <strong>${dashboardCore.escapeHtml(error.type)}</strong>
+                    <small>${new Date(error.timestamp).toLocaleTimeString()}</small>
+                </div>
+                <p>${dashboardCore.escapeHtml(error.message)}</p>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="error-item">
+                <strong>Failed to load recent issues</strong><br>
+                <small>${dashboardCore.escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+// Load database status for the system tab
+async function loadDatabaseStatus() {
+    const container = document.getElementById('database-status');
+    if (!container) return;
+    
+    try {
+        const data = await dashboardCore.fetchData('/api/database/status');
+        
+        const html = `
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-database"></i>
+                    Database Type
+                </span>
+                <span class="metric-value">
+                    ${data.type || 'Unknown'}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-hdd"></i>
+                    Database Size
+                </span>
+                <span class="metric-value">
+                    ${dashboardCore.formatBytes(data.size || 0)}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-table"></i>
+                    Total Records
+                </span>
+                <span class="metric-value">
+                    ${(data.total_records || 0).toLocaleString()}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">
+                    <i class="fas fa-clock"></i>
+                    Response Time
+                </span>
+                <span class="metric-value">
+                    ${data.response_time || 0}ms
+                </span>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="error-item">
+                <strong>Failed to load database status</strong><br>
+                <small>${dashboardCore.escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+// Initialize charts for command usage and server distribution
+async function initializeCharts() {
+    try {
+        // Initialize command usage chart
+        const usageCanvas = document.getElementById('usageChart');
+        if (usageCanvas) {
+            await initializeUsageChart(usageCanvas);
+        }
+        
+        // Initialize server distribution chart
+        const serverCanvas = document.getElementById('serverChart');
+        if (serverCanvas) {
+            await initializeServerChart(serverCanvas);
+        }
+        
+        console.log('Charts initialized successfully');
+        
+    } catch (error) {
+        console.error('Failed to initialize charts:', error);
+    }
+}
+
+// Initialize usage chart
+async function initializeUsageChart(canvas) {
+    try {
+        const data = await dashboardCore.fetchData('/api/usage/24h');
+        
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Total Commands',
+                    data: data.commands || [],
+                    borderColor: '#4CAF50',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Music Commands',
+                    data: data.music_commands || [],
+                    borderColor: '#2196F3',
+                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#ffffff' }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#ffffff' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#ffffff' }
+                    }
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Failed to initialize usage chart:', error);
+    }
+}
+
+// Initialize server distribution chart
+async function initializeServerChart(canvas) {
+    try {
+        const data = await dashboardCore.fetchData('/api/guilds/distribution');
+        
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    data: data.values || [],
+                    backgroundColor: [
+                        '#FF6384',
+                        '#36A2EB', 
+                        '#FFCE56',
+                        '#4BC0C0',
+                        '#9966FF'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#ffffff' }
+                    }
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Failed to initialize server chart:', error);
+    }
+}
+
+// Update the main dashboard initialization to include these new functions
+const originalLoadInitialData = DashboardCore.prototype.loadInitialData;
+DashboardCore.prototype.loadInitialData = async function() {
+    try {
+        console.log('Loading comprehensive initial data...');
+        
+        // Load original data
+        await originalLoadInitialData.call(this);
+        
+        // Load additional overview data
+        await loadServerOverview();
+        await loadMusicActivity();
+        await loadRecentIssues();
+        
+        // Load system data
+        await loadDatabaseStatus();
+        
+        // Initialize charts
+        await initializeCharts();
+        
+        console.log('All dashboard data loaded successfully');
+        
+    } catch (error) {
+        console.error('Failed to load comprehensive dashboard data:', error);
+        this.showError('Failed to load dashboard data: ' + error.message);
+    }
+};
+
+console.log('Dashboard JavaScript extensions loaded');
+
 // Refresh functions for buttons
 function refreshServers() {
     loadServersData();
